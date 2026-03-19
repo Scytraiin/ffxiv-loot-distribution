@@ -164,7 +164,7 @@ docker run --rm \
 
 ## GitHub Actions
 
-This workspace also includes GitHub Actions for two different jobs:
+This workspace includes a hosted GitHub Actions workflow for safe, fast validation.
 
 ### `CI`
 
@@ -180,26 +180,41 @@ It does not:
 - build the actual Dalamud plugin package
 - create release assets
 
-### `Release Self-Hosted`
+### Recommended Release Flow
 
-The release workflow is intended for a self-hosted Windows runner that has access to a real Dalamud dev folder.
+For now, release packaging is intentionally kept out of GitHub Actions.
 
-It does:
+Reason:
 
-- verify the release tag matches the project version
-- run the unit tests again
-- build the plugin in `Release`
-- collect `latest.zip` and the generated manifest
-- generate an updated `scyt.repo.json`
-- upload all release-ready files as workflow artifacts
+- `Dalamud.NET.Sdk` packaging depends on a real Dalamud `Hooks/dev` environment
+- the reference repo in this workspace does not provide a reusable GitHub Actions solution for that
+- forcing a self-hosted Windows runner adds operational overhead before the plugin itself is stable
 
-It requires:
+Recommended flow:
 
-- a self-hosted Windows runner
-- a repository variable named `DALAMUD_HOME`
-- that `DALAMUD_HOME` points to a valid Dalamud `Hooks/dev` folder
+1. Use GitHub Actions `CI` for every push and pull request.
+2. Do runtime testing in a real Dalamud game environment.
+3. Build the release package manually on the machine that has the working Dalamud dev environment.
+4. Upload the ZIP to GitHub Releases.
+5. Update `scyt.repo.json` with the real release URLs.
 
-This split is intentional: hosted CI is good for fast validation, while real plugin packaging still depends on an actual Dalamud runtime tree.
+That keeps automation focused on what is reliable today and avoids a half-working release pipeline.
+
+### Manual Release Checklist
+
+When you are ready to publish a version:
+
+1. Update the version in `LootDistributionInfo.csproj`.
+2. Build the plugin on the machine that has a valid Dalamud dev setup.
+3. Confirm the output ZIP and generated manifest are correct.
+4. Create a GitHub release and upload the ZIP.
+5. Update `scyt.repo.json` so:
+   - `RepoUrl` points to the real GitHub repository
+   - `AssemblyVersion` and `TestingAssemblyVersion` match the release
+   - download links point to the uploaded ZIP
+   - `LastUpdate` is refreshed
+   - `Changelog` contains the release summary
+6. Host or publish the updated `scyt.repo.json`.
 
 ---
 
