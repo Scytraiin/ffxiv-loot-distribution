@@ -1,0 +1,7 @@
+.git
+**/bin
+**/obj
+.DS_Store
+*.zip
+Dalamud-master.zip
+FFXIV-ProximityVoiceChat-master.zip
