@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dalamud Plugin Skeleton"
+  short_description: "Generate Dalamud plugin starter code"
+  default_prompt: "Use $dalamud-plugin-skeleton to scaffold a new Dalamud plugin skeleton for a Dalamud plugin idea."

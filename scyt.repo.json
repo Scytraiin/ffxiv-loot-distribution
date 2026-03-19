@@ -1,0 +1,22 @@
+[
+  {
+    "Author": "scyt.raiin",
+    "Name": "Loot Distribution Info",
+    "Description": "Minimal Dalamud plugin skeleton for presenting loot distribution information in Final Fantasy XIV.",
+    "Punchline": "Shows a starter window for loot distribution details.",
+    "InternalName": "LootDistributionInfo",
+    "AssemblyVersion": "0.0.1.0",
+    "TestingAssemblyVersion": "0.0.1.0",
+    "RepoUrl": "https://github.com/example/LootDistributionInfo",
+    "ApplicableVersion": "any",
+    "DalamudApiLevel": 14,
+    "IsHide": false,
+    "IsTestingExclusive": false,
+    "LastUpdate": 1773234511,
+    "DownloadCount": 0,
+    "DownloadLinkInstall": "https://github.com/example/LootDistributionInfo/releases/download/v0.0.1.0/LootDistributionInfo.zip",
+    "DownloadLinkTesting": "https://github.com/example/LootDistributionInfo/releases/download/v0.0.1.0/LootDistributionInfo.zip",
+    "DownloadLinkUpdate": "https://github.com/example/LootDistributionInfo/releases/download/v0.0.1.0/LootDistributionInfo.zip",
+    "Changelog": "Initial placeholder release."
+  }
+]

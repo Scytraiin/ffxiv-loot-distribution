@@ -1,0 +1,10 @@
+{
+  "Author": __AUTHOR_JSON__,
+  "Name": __PLUGIN_NAME_JSON__,
+  "Punchline": __PUNCHLINE_JSON__,
+  "Description": __DESCRIPTION_JSON__,
+  "RepoUrl": __REPO_URL_JSON__,
+  "InternalName": "__INTERNAL_NAME__",
+  "ApplicableVersion": "any",
+  "Tags": __TAGS_JSON__
+}

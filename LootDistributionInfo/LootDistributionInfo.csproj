@@ -1,0 +1,13 @@
+<Project Sdk="Dalamud.NET.Sdk/14.0.1">
+  <PropertyGroup>
+    <Authors>scyt.raiin</Authors>
+    <Version>0.0.1.0</Version>
+    <Description>Minimal Dalamud plugin skeleton for presenting loot distribution information in Final Fantasy XIV.</Description>
+    <PackageProjectUrl>https://github.com/example/LootDistributionInfo</PackageProjectUrl>
+    <IsPackable>false</IsPackable>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+</Project>
