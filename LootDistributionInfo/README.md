@@ -1,67 +1,140 @@
 # Loot Distribution Info
 
-Loot Distribution Info is a minimal Dalamud plugin that listens to chat and log output, keeps lines that look like loot acquisition messages, and shows the captured history in a small in-game window.
+> A small Dalamud plugin that watches chat and log output for loot-acquisition lines and keeps a clean, searchable history in-game.
 
-## What v1 does
+---
+
+## At a Glance
+
+| Topic | Details |
+| --- | --- |
+| Plugin | `Loot Distribution Info` |
+| Command | `/lootinfo` |
+| Settings | `/lootinfo config` |
+| Goal | Capture lines like `You obtain ...` and show them in a simple history window |
+| Current approach | Broad wildcard-style text matching on loot verbs |
+| Scope | Read-only observation through standard Dalamud services |
+
+---
+
+## What It Does
 
 - Watches `ChatMessage` and `LogMessage` through Dalamud.
-- Keeps lines that contain `obtain`, `obtained`, or `obtains`.
+- Detects lines containing loot-style verbs such as `obtain`, `obtained`, and `obtains`.
 - Stores captured lines in memory and, by default, persists them across sessions.
 - Shows a newest-first history list in the plugin window.
-- Supports `/lootinfo` and `/lootinfo config`.
+- Lets you filter the captured history and clear it when needed.
 
-## What v1 does not do
+## What It Does Not Do
 
-- It does not hook packets or game memory beyond standard Dalamud chat/log services.
-- It does not rewrite, suppress, or re-print chat lines.
-- It does not try to build a perfect loot parser yet.
+- It does not hook packets or use unsupported runtime tricks.
+- It does not suppress, rewrite, or re-print chat lines.
+- It does not attempt perfect semantic parsing yet.
 - It does not support export or multi-language matching in this first version.
 
-## Matching behavior
+---
 
-The matcher is intentionally broad in v1. It normalizes each incoming line and checks for the words:
+## How Matching Works
+
+Version 1 intentionally favors simplicity over precision.
+
+The matcher normalizes each incoming line and looks for broad loot-style verbs:
 
 - `obtain`
 - `obtained`
 - `obtains`
 
-That means it should catch common lines like:
+That means it should catch common lines such as:
 
 - `You obtain 368 gil.`
 - `You obtain a bottle of desert saffron.`
 - `Player X obtains a loot item.`
 
-Because this is a simple wildcard-style matcher, some false positives are possible. The current goal is broad capture with low complexity.
+Because the matching is intentionally broad, some false positives are possible. That tradeoff is deliberate for the first release.
 
-## Repository file for Dalamud
+---
 
-The workspace root contains a custom repository file named `scyt.repo.json`.
+## In-Game Usage
 
-When you eventually host it, add the hosted URL to Dalamud's custom plugin repositories. The file currently uses dummy GitHub URLs and must be updated before any real publishing:
+### Main Window
+
+- Run `/lootinfo` to open the plugin window.
+- The main view shows captured loot-like lines in a newest-first list.
+- Use the filter field to narrow the list.
+- Use `Clear history` to wipe the current captured history.
+
+### Settings
+
+Run `/lootinfo config` to open the settings window.
+
+Available settings:
+
+- `Retain history between sessions`
+- `Max stored entries`
+
+---
+
+## Repository for Dalamud
+
+The workspace root contains a custom repository file:
+
+- `scyt.repo.json`
+
+That file is meant to be hosted later and added to Dalamud as a custom plugin repository.
+
+Current state:
+
+- the GitHub URLs are placeholders
+- the release ZIP URLs are placeholders
+- they must be replaced before real publishing
+
+Current placeholder base URL:
 
 - `https://github.com/example/LootDistributionInfo`
-- dummy release ZIP URLs under that same repo
 
-## Local development
+---
 
-Project files:
+## Project Layout
 
 - plugin: `LootDistributionInfo/`
-- custom repo metadata: `scyt.repo.json`
 - tests: `LootDistributionInfo.Tests/`
+- custom repo metadata: `scyt.repo.json`
 
-Typical workflow:
+---
 
-1. Replace the dummy GitHub URLs in the manifest and `scyt.repo.json`.
-2. Build the plugin with the local .NET SDK and Dalamud toolchain installed.
-3. Host the plugin ZIP and `scyt.repo.json`.
-4. Add the hosted repo URL to Dalamud.
+## Local Development Workflow
+
+1. Replace the placeholder GitHub URLs in the manifest and `scyt.repo.json`.
+2. Build the plugin with a real Dalamud-capable environment.
+3. Test it in game through a dev plugin path or through a hosted custom repo.
+4. Publish the plugin ZIP and `scyt.repo.json` once the behavior is stable.
+
+---
 
 ## Docker Validation
 
-Docker support is additive infrastructure around this project. It does not change the plugin structure, plugin behavior, matcher logic, repo metadata shape, or the existing tests.
+Docker support in this workspace is additive infrastructure only.
 
-Use these commands from `/Users/scyt.raiin/Documents/FFYIV`:
+It does **not**:
+
+- change plugin behavior
+- change matcher logic
+- change repository metadata shape
+- install .NET on your host system
+- run the plugin inside FFXIV
+
+It **does**:
+
+- restore packages inside the container
+- run the unit tests
+- attempt to build the Windows-targeted plugin when a real `DALAMUD_HOME` is mounted
+- optionally export build output
+
+### Commands
+
+Run these commands from:
+
+- `workspace root`
 
 ```bash
 docker build -t loot-distribution-info-ci .
@@ -69,24 +142,9 @@ docker run --rm loot-distribution-info-ci
 docker run --rm -v "$PWD/out:/out" loot-distribution-info-ci
 ```
 
-What this Docker workflow does:
+### When You Have a Real Dalamud Dev Folder
 
-- restores NuGet packages inside the container
-- runs the unit tests
-- builds the Windows-targeted plugin with Windows targeting enabled when a valid `DALAMUD_HOME` is mounted
-- optionally exports the compiled build output to `./out/plugin`
-
-What it does not do:
-
-- it does not install .NET on the host system
-- it does not run the plugin inside FFXIV or Dalamud
-- it does not change the existing project structure
-
-Notes:
-
-- package restore happens inside Docker and needs network access
-- plugin compilation requires a real Dalamud `Hooks/dev` folder to be mounted into the container as `/dalamud`
-- if you have a local Dalamud installation, the command shape is:
+If you have a valid Dalamud `Hooks/dev` folder, mount it into the container as `/dalamud`:
 
 ```bash
 docker run --rm \
@@ -95,19 +153,42 @@ docker run --rm \
   loot-distribution-info-ci
 ```
 
-- the optional export command writes compiled plugin output to `./out/plugin`
-- if you only want test validation, `docker run --rm loot-distribution-info-ci` is still useful and will stop after the tests with a clear message about the missing Dalamud dev folder
+### Notes
 
-## Testing
+- Package restore happens inside Docker and needs network access.
+- The plugin build requires a real Dalamud `Hooks/dev` folder.
+- Without that folder, the container still runs the tests and then stops with a clear message.
+- Optional exported build output is written to `./out/plugin`.
 
-The test project covers:
+---
 
-- wildcard matcher positive and negative cases
+## Test Coverage
+
+The current test project covers:
+
+- positive matcher cases
+- negative matcher cases
 - dedupe behavior across chat/log capture
 - retention trimming
-- repository metadata alignment between `scyt.repo.json` and `LootDistributionInfo.json`
+- metadata alignment between `scyt.repo.json` and `LootDistributionInfo.json`
 
-## Commands
+---
+
+## Commands Reference
 
 - `/lootinfo` opens the main window
 - `/lootinfo config` opens the config window
+
+---
+
+## Current Status
+
+This project is in a pragmatic v1 state:
+
+- the plugin structure exists
+- the capture logic exists
+- the custom repo metadata exists
+- Docker-based validation exists
+- publishing URLs are still placeholders
+
+That makes it ready for iterative testing, not final public release.
