@@ -162,6 +162,47 @@ docker run --rm \
 
 ---
 
+## GitHub Actions
+
+This workspace also includes GitHub Actions for two different jobs:
+
+### `CI`
+
+The hosted CI workflow is safe to run on normal GitHub-hosted runners.
+
+It does:
+
+- restore and run the unit tests
+- build the Docker validation image as a workflow smoke check
+
+It does not:
+
+- build the actual Dalamud plugin package
+- create release assets
+
+### `Release Self-Hosted`
+
+The release workflow is intended for a self-hosted Windows runner that has access to a real Dalamud dev folder.
+
+It does:
+
+- verify the release tag matches the project version
+- run the unit tests again
+- build the plugin in `Release`
+- collect `latest.zip` and the generated manifest
+- generate an updated `scyt.repo.json`
+- upload all release-ready files as workflow artifacts
+
+It requires:
+
+- a self-hosted Windows runner
+- a repository variable named `DALAMUD_HOME`
+- that `DALAMUD_HOME` points to a valid Dalamud `Hooks/dev` folder
+
+This split is intentional: hosted CI is good for fast validation, while real plugin packaging still depends on an actual Dalamud runtime tree.
+
+---
+
 ## Test Coverage
 
 The current test project covers:

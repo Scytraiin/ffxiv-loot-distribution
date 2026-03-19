@@ -1,0 +1,146 @@
+name: Release Self-Hosted
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to package, for example v0.0.1.0"
+        required: true
+        type: string
+      changelog:
+        description: "Short changelog line for scyt.repo.json"
+        required: false
+        default: "Release build"
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on:
+      - self-hosted
+      - windows
+
+    env:
+      PLUGIN_PROJECT: LootDistributionInfo/LootDistributionInfo.csproj
+      TEST_PROJECT: LootDistributionInfo.Tests/LootDistributionInfo.Tests.csproj
+      PLUGIN_OUTPUT_ROOT: LootDistributionInfo/bin/Release
+      DALAMUD_HOME: ${{ vars.DALAMUD_HOME }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve release metadata
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $tag = '${{ inputs.tag }}'
+            $changelog = '${{ inputs.changelog }}'
+          } else {
+            $tag = '${{ github.ref_name }}'
+            $changelog = 'Release build'
+          }
+
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw 'Release tag could not be resolved.'
+          }
+
+          $version = $tag.TrimStart('v')
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_CHANGELOG=$changelog" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Validate DALAMUD_HOME
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:DALAMUD_HOME)) {
+            throw 'Repository variable DALAMUD_HOME is not set.'
+          }
+
+          if (-not (Test-Path $env:DALAMUD_HOME)) {
+            throw "DALAMUD_HOME does not exist: $env:DALAMUD_HOME"
+          }
+
+          Write-Host "Using DALAMUD_HOME=$env:DALAMUD_HOME"
+
+      - name: Validate version matches tag
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content $env:PLUGIN_PROJECT
+          $projectVersion = $project.Project.PropertyGroup.Version | Select-Object -First 1
+
+          if ([string]::IsNullOrWhiteSpace($projectVersion)) {
+            throw 'Could not resolve project version from csproj.'
+          }
+
+          if ($projectVersion -ne $env:RELEASE_VERSION) {
+            throw "Tag version ($env:RELEASE_VERSION) does not match csproj version ($projectVersion)."
+          }
+
+      - name: Restore test project
+        run: dotnet restore ${{ env.TEST_PROJECT }}
+
+      - name: Run tests
+        run: dotnet test ${{ env.TEST_PROJECT }} --no-restore --configuration Release
+
+      - name: Restore plugin project
+        run: dotnet restore ${{ env.PLUGIN_PROJECT }} -p:EnableWindowsTargeting=true
+
+      - name: Build release package
+        run: dotnet build ${{ env.PLUGIN_PROJECT }} --no-restore --configuration Release -p:EnableWindowsTargeting=true
+
+      - name: Collect packaged files
+        shell: pwsh
+        run: |
+          $artifactRoot = Join-Path $env:GITHUB_WORKSPACE 'artifacts'
+          if (Test-Path $artifactRoot) {
+            Remove-Item $artifactRoot -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path $artifactRoot | Out-Null
+
+          $latestZip = Get-ChildItem -Path $env:PLUGIN_OUTPUT_ROOT -Filter 'latest.zip' -Recurse | Select-Object -First 1
+          if ($null -eq $latestZip) {
+            throw 'Could not find latest.zip produced by DalamudPackager.'
+          }
+
+          $generatedManifest = Get-ChildItem -Path $env:PLUGIN_OUTPUT_ROOT -Filter 'LootDistributionInfo.json' -Recurse |
+            Where-Object { $_.FullName -notmatch '\\obj\\' } |
+            Sort-Object FullName |
+            Select-Object -First 1
+
+          if ($null -eq $generatedManifest) {
+            throw 'Could not find packaged LootDistributionInfo.json output.'
+          }
+
+          Copy-Item $latestZip.FullName (Join-Path $artifactRoot 'LootDistributionInfo.zip')
+          Copy-Item $generatedManifest.FullName (Join-Path $artifactRoot 'LootDistributionInfo.json')
+
+      - name: Generate scyt.repo.json
+        shell: pwsh
+        run: |
+          ./.github/scripts/Generate-RepoJson.ps1 `
+            -TemplatePath 'scyt.repo.json' `
+            -OutputPath 'artifacts/scyt.repo.json' `
+            -Repository '${{ github.repository }}' `
+            -Tag $env:RELEASE_TAG `
+            -Version $env:RELEASE_VERSION `
+            -AssetName 'LootDistributionInfo.zip' `
+            -Changelog $env:RELEASE_CHANGELOG
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: LootDistributionInfo-${{ env.RELEASE_TAG }}
+          path: artifacts/*
+          if-no-files-found: error
