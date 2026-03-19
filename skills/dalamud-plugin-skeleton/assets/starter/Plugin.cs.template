@@ -1,0 +1,95 @@
+using System;
+
+using Dalamud.Game.Command;
+using Dalamud.Interface.Windowing;
+using Dalamud.Plugin;
+using Dalamud.Plugin.Services;
+
+using __NAMESPACE__.Windows;
+
+namespace __NAMESPACE__;
+
+public sealed class Plugin : IDalamudPlugin
+{
+    private const string CommandName = "__COMMAND_CSHARP__";
+
+    private readonly IDalamudPluginInterface pluginInterface;
+    private readonly ICommandManager commandManager;
+    private readonly IPluginLog log;
+    private readonly WindowSystem windowSystem = new("__INTERNAL_NAME_CSHARP__");
+    private readonly MainWindow mainWindow;
+    private readonly ConfigWindow configWindow;
+    private readonly Configuration configuration;
+
+    public Plugin(
+        IDalamudPluginInterface pluginInterface,
+        ICommandManager commandManager,
+        IPluginLog log)
+    {
+        this.pluginInterface = pluginInterface;
+        this.commandManager = commandManager;
+        this.log = log;
+
+        this.configuration = this.pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        this.configuration.Initialize(this.pluginInterface);
+
+        this.mainWindow = new MainWindow(this.configuration, this.OpenConfigUi);
+        this.configWindow = new ConfigWindow(this.configuration);
+
+        this.windowSystem.AddWindow(this.mainWindow);
+        this.windowSystem.AddWindow(this.configWindow);
+
+        this.commandManager.AddHandler(CommandName, new CommandInfo(this.OnCommand)
+        {
+            HelpMessage = "Open the __PLUGIN_NAME_CSHARP__ window.",
+        });
+
+        this.pluginInterface.UiBuilder.Draw += this.DrawUi;
+        this.pluginInterface.UiBuilder.OpenMainUi += this.OpenMainUi;
+        this.pluginInterface.UiBuilder.OpenConfigUi += this.OpenConfigUi;
+
+        this.log.Information("__PLUGIN_NAME_CSHARP__ initialized.");
+    }
+
+    public void Dispose()
+    {
+        this.pluginInterface.UiBuilder.Draw -= this.DrawUi;
+        this.pluginInterface.UiBuilder.OpenMainUi -= this.OpenMainUi;
+        this.pluginInterface.UiBuilder.OpenConfigUi -= this.OpenConfigUi;
+
+        this.commandManager.RemoveHandler(CommandName);
+
+        this.windowSystem.RemoveAllWindows();
+
+        this.mainWindow.Dispose();
+        this.configWindow.Dispose();
+
+        this.log.Information("__PLUGIN_NAME_CSHARP__ disposed.");
+    }
+
+    private void OnCommand(string command, string args)
+    {
+        if (string.Equals(args.Trim(), "config", StringComparison.OrdinalIgnoreCase))
+        {
+            this.OpenConfigUi();
+            return;
+        }
+
+        this.OpenMainUi();
+    }
+
+    private void DrawUi()
+    {
+        this.windowSystem.Draw();
+    }
+
+    private void OpenMainUi()
+    {
+        this.mainWindow.IsOpen = true;
+    }
+
+    private void OpenConfigUi()
+    {
+        this.configWindow.IsOpen = true;
+    }
+}

@@ -1,0 +1,60 @@
+using System;
+using System.Numerics;
+
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Windowing;
+
+namespace __NAMESPACE__.Windows;
+
+public sealed class MainWindow : Window, IDisposable
+{
+    private readonly Configuration configuration;
+    private readonly Action openConfigUi;
+
+    public MainWindow(Configuration configuration, Action openConfigUi)
+        : base("__PLUGIN_NAME_CSHARP__")
+    {
+        this.configuration = configuration;
+        this.openConfigUi = openConfigUi;
+
+        this.Size = new Vector2(430, 220);
+        this.SizeCondition = ImGuiCond.FirstUseEver;
+        this.SizeConstraints = new WindowSizeConstraints
+        {
+            MinimumSize = new Vector2(380, 180),
+            MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
+        };
+    }
+
+    public void Dispose()
+    {
+    }
+
+    public override void Draw()
+    {
+        ImGui.TextUnformatted("__PLUGIN_NAME_CSHARP__ skeleton loaded.");
+        ImGui.Separator();
+
+        var showGreetingText = this.configuration.ShowGreetingText;
+        if (ImGui.Checkbox("Show greeting text", ref showGreetingText))
+        {
+            this.configuration.ShowGreetingText = showGreetingText;
+            this.configuration.Save();
+        }
+
+        if (this.configuration.ShowGreetingText)
+        {
+            ImGui.Spacing();
+            ImGui.TextWrapped("Replace this sample window with your plugin UI. Keep the command, config save, and window wiring as the stable baseline.");
+        }
+
+        ImGui.Spacing();
+        if (ImGui.Button("Open settings"))
+        {
+            this.openConfigUi();
+        }
+
+        ImGui.SameLine();
+        ImGui.TextUnformatted("Command: __COMMAND_CSHARP__");
+    }
+}

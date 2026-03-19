@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.v3.assert" Version="3.2.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\LootDistributionInfo\LootCaptureSource.cs" Link="Plugin\LootCaptureSource.cs" />
+    <Compile Include="..\LootDistributionInfo\LootHistory.cs" Link="Plugin\LootHistory.cs" />
+    <Compile Include="..\LootDistributionInfo\LootMatcher.cs" Link="Plugin\LootMatcher.cs" />
+    <Compile Include="..\LootDistributionInfo\LootRecord.cs" Link="Plugin\LootRecord.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\scyt.repo.json" Link="TestData\scyt.repo.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\LootDistributionInfo\LootDistributionInfo.json" Link="TestData\LootDistributionInfo.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,13 @@
+<Project Sdk="Dalamud.NET.Sdk/__SDK_VERSION__">
+  <PropertyGroup>
+    <Authors>__AUTHOR_XML__</Authors>
+    <Version>__PLUGIN_VERSION_XML__</Version>
+    <Description>__DESCRIPTION_XML__</Description>
+    <PackageProjectUrl>__REPO_URL_XML__</PackageProjectUrl>
+    <IsPackable>false</IsPackable>
+    <TargetFramework>__TARGET_FRAMEWORK__</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+</Project>
