@@ -3,7 +3,7 @@
   "Name": "Loot Distribution Info",
   "Punchline": "Shows a starter window for loot distribution details.",
   "Description": "Minimal Dalamud plugin skeleton for presenting loot distribution information in Final Fantasy XIV.",
-  "RepoUrl": "https://github.com/example/LootDistributionInfo",
+  "RepoUrl": "https://github.com/Scytraiin/ffxiv-loot-distribution",
   "InternalName": "LootDistributionInfo",
   "ApplicableVersion": "any",
   "Tags": [

@@ -7,16 +7,16 @@
     "InternalName": "LootDistributionInfo",
     "AssemblyVersion": "0.0.1.0",
     "TestingAssemblyVersion": "0.0.1.0",
-    "RepoUrl": "https://github.com/example/LootDistributionInfo",
+    "RepoUrl": "https://github.com/Scytraiin/ffxiv-loot-distribution",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 14,
     "IsHide": false,
     "IsTestingExclusive": false,
-    "LastUpdate": 1773234511,
+    "LastUpdate": 1773991210,
     "DownloadCount": 0,
-    "DownloadLinkInstall": "https://github.com/example/LootDistributionInfo/releases/download/v0.0.1.0/LootDistributionInfo.zip",
-    "DownloadLinkTesting": "https://github.com/example/LootDistributionInfo/releases/download/v0.0.1.0/LootDistributionInfo.zip",
-    "DownloadLinkUpdate": "https://github.com/example/LootDistributionInfo/releases/download/v0.0.1.0/LootDistributionInfo.zip",
-    "Changelog": "Initial placeholder release."
+    "DownloadLinkInstall": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.1.0/latest.zip",
+    "DownloadLinkTesting": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.1.0/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.1.0/latest.zip",
+    "Changelog": "Initial release."
   }
 ]
