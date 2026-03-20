@@ -3,7 +3,7 @@
     <Authors>scyt.raiin</Authors>
     <Version>0.0.1.0</Version>
     <Description>Minimal Dalamud plugin skeleton for presenting loot distribution information in Final Fantasy XIV.</Description>
-    <PackageProjectUrl>https://github.com/example/LootDistributionInfo</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Scytraiin/ffxiv-loot-distribution</PackageProjectUrl>
     <IsPackable>false</IsPackable>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
