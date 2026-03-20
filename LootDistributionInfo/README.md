@@ -84,13 +84,15 @@ That file is meant to be hosted later and added to Dalamud as a custom plugin re
 
 Current state:
 
-- the GitHub URLs are placeholders
-- the release ZIP URLs are placeholders
-- they must be replaced before real publishing
+- the repository URL points to the real GitHub repository
+- the custom repo JSON currently targets the alpha release asset
+- the release asset must be uploaded as `latest.zip`
 
-Current placeholder base URL:
+Current release target:
 
-- `https://github.com/example/LootDistributionInfo`
+- repo: `https://github.com/Scytraiin/ffxiv-loot-distribution`
+- tag: `v0.0.1-alpha`
+- asset: `latest.zip`
 
 ---
 
@@ -104,7 +106,7 @@ Current placeholder base URL:
 
 ## Local Development Workflow
 
-1. Replace the placeholder GitHub URLs in the manifest and `scyt.repo.json`.
+1. Update the project version and release tag when publishing a new version.
 2. Build the plugin with a real Dalamud-capable environment.
 3. Test it in game through a dev plugin path or through a hosted custom repo.
 4. Publish the plugin ZIP and `scyt.repo.json` once the behavior is stable.

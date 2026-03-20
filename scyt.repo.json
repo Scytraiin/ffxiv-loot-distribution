@@ -12,11 +12,11 @@
     "DalamudApiLevel": 14,
     "IsHide": false,
     "IsTestingExclusive": false,
-    "LastUpdate": 1773991210,
+    "LastUpdate": 1773992836,
     "DownloadCount": 0,
-    "DownloadLinkInstall": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.1.0/latest.zip",
-    "DownloadLinkTesting": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.1.0/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.1.0/latest.zip",
-    "Changelog": "Initial release."
+    "DownloadLinkInstall": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.1-alpha/latest.zip",
+    "DownloadLinkTesting": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.1-alpha/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.1-alpha/latest.zip",
+    "Changelog": "Initial alpha release."
   }
 ]
