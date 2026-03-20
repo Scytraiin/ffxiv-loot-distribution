@@ -6,3 +6,7 @@
 .idea
 /14.0.4.1.zip
 /14.0.4.1
+.DS_Store
+__pycache__/
+*.pyc
+/out
