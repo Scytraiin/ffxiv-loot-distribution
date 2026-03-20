@@ -136,7 +136,7 @@ It **does**:
 
 Run these commands from:
 
-- `workspace root`
+- workspace root
 
 ```bash
 docker build -t loot-distribution-info-ci .

@@ -86,7 +86,7 @@ It is **not** for:
 
 Run from:
 
-- `workspace root`
+- workspace root
 
 ```bash
 docker build -t loot-distribution-info-ci .
