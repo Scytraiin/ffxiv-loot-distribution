@@ -29,6 +29,14 @@ public sealed class LootRecord
 
     public string? LootText { get; set; }
 
+    public uint? ItemId { get; set; }
+
+    public uint? IconId { get; set; }
+
+    public uint? Rarity { get; set; }
+
+    public bool IsHighQuality { get; set; }
+
     public string? ItemCategoryLabel { get; set; }
 
     public byte? FilterGroupId { get; set; }

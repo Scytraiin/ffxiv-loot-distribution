@@ -15,6 +15,7 @@ It also contains:
 - a standalone test project for the pure matching/history logic
 - a custom Dalamud repository JSON
 - Docker-based validation support
+- tracked feature documentation in `Feature_detail.md`
 
 ---
 
@@ -101,6 +102,12 @@ docker run --rm \
 
 This workspace is set up for iterative plugin development.
 
+License:
+
+- GPL-3.0
+- see `LICENSE`
+- implementation remains clean-room even where feature direction was inspired by other loot-tracking plugins
+
 Current state:
 
 - plugin project exists
@@ -108,8 +115,9 @@ Current state:
 - custom repo metadata exists
 - Docker validation exists
 - release-ready artifacts can be exported to `out/release`
-- the current release target is `v0.1.3-alpha`
+- the current release target is `v0.2.0-beta`
 
 For plugin-specific details, see:
 
 - `LootDistributionInfo/README.md`
+- `Feature_detail.md`

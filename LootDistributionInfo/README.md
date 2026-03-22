@@ -2,6 +2,8 @@
 
 > A Dalamud plugin that tracks loot messages and keeps a searchable in-game history of where the loot happened and who received it.
 
+License: GPL-3.0. The implementation is clean-room even where feature direction was inspired by other loot-tracking plugins.
+
 ---
 
 ## At a Glance
@@ -23,6 +25,7 @@
 - Detects lines containing loot-style verbs such as `obtain`, `obtained`, and `obtains`.
 - Resolves the current zone and snapshots it onto each loot record.
 - Attempts to determine who got the loot, including party/alliance verification when possible.
+- Resolves item metadata such as icon, rarity, and item classification when the game data allows it.
 - Stores captured lines in memory and, by default, persists them across sessions.
 - Shows a newest-first history list in the plugin window.
 - Lets you filter the captured history and clear it when needed.
@@ -101,7 +104,7 @@ Current state:
 Current release target:
 
 - repo: `https://github.com/Scytraiin/ffxiv-loot-distribution`
-- tag: `v0.1.3-alpha`
+- tag: `v0.2.0-beta`
 - asset: `latest.zip`
 
 ---
@@ -111,6 +114,7 @@ Current release target:
 - plugin: `LootDistributionInfo/`
 - tests: `LootDistributionInfo.Tests/`
 - custom repo metadata: `scyt.repo.json`
+- canonical feature reference: `Feature_detail.md`
 
 ---
 
@@ -256,6 +260,7 @@ This project is in an active alpha release state:
 
 - the loot history UI is implemented
 - zone and recipient enrichment are implemented
+- item classification, item icons, rarity styling, and overview stats are implemented
 - Debug Mode is implemented
 - Docker-based validation is working
 - release artifacts can be generated locally and uploaded to GitHub Releases

@@ -10,7 +10,7 @@ namespace LootDistributionInfo;
 public sealed class Configuration : IPluginConfiguration
 {
     public const int DefaultMaxEntries = 500;
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
 
     [NonSerialized]
     private IDalamudPluginInterface? pluginInterface;
@@ -22,6 +22,14 @@ public sealed class Configuration : IPluginConfiguration
     public int MaxEntries { get; set; } = DefaultMaxEntries;
 
     public bool DebugModeEnabled { get; set; }
+
+    public bool ShowItemIcons { get; set; } = true;
+
+    public bool ShowItemTooltips { get; set; } = true;
+
+    public bool ShowOnlySelfLoot { get; set; }
+
+    public List<uint> BlacklistedItemIds { get; set; } = [];
 
     public List<LootRecord> StoredRecords { get; set; } = [];
 
@@ -42,6 +50,7 @@ public sealed class Configuration : IPluginConfiguration
         this.Version = CurrentVersion;
         this.MaxEntries = Math.Clamp(this.MaxEntries, 1, 5000);
         this.StoredRecords ??= [];
+        this.BlacklistedItemIds ??= [];
 
         foreach (var record in this.StoredRecords)
         {

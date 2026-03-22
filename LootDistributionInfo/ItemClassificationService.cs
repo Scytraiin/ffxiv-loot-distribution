@@ -32,6 +32,7 @@ public sealed class ItemClassificationService
     ];
 
     private readonly Dictionary<string, ItemClassificationResult> classificationByLookupKey = new(StringComparer.Ordinal);
+    private readonly Dictionary<uint, ItemClassificationResult> classificationByItemId = [];
 
     public ItemClassificationService(IDataManager dataManager)
     {
@@ -44,12 +45,23 @@ public sealed class ItemClassificationService
                 continue;
             }
 
-            this.classificationByLookupKey[lookupKey] = CreateResult(item, resolvedItemName);
+            var result = CreateResult(item, resolvedItemName);
+            this.classificationByLookupKey[lookupKey] = result;
+
+            if (result.ItemId is uint itemId)
+            {
+                this.classificationByItemId[itemId] = result;
+            }
         }
     }
 
-    public ItemClassificationResult Classify(string? lootText)
+    public ItemClassificationResult Classify(string? lootText, uint? itemId = null)
     {
+        if (itemId is uint knownItemId && this.classificationByItemId.TryGetValue(knownItemId, out var itemResult))
+        {
+            return itemResult;
+        }
+
         var lookupKey = NormalizeLookupKey(lootText);
         return lookupKey.Length != 0 && this.classificationByLookupKey.TryGetValue(lookupKey, out var result)
             ? result
@@ -75,11 +87,26 @@ public sealed class ItemClassificationService
             trimmed = trimmed[(quantityEnd + 1)..];
         }
 
+        if (trimmed.EndsWith(" HQ", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed[..^3];
+        }
+
+        foreach (var prefix in new[] { "a ", "an ", "the " })
+        {
+            if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                trimmed = trimmed[prefix.Length..];
+                break;
+            }
+        }
+
         return LootMatcher.NormalizeForMatch(trimmed).Trim();
     }
 
     private static ItemClassificationResult CreateResult(Item item, string resolvedItemName)
     {
+        var itemId = item.RowId == 0 ? null : (uint?)item.RowId;
         byte? filterGroupId = item.FilterGroup == 0 ? null : (byte?)item.FilterGroup;
         var filterGroupLabel = filterGroupId is byte filterGroup ? ItemCategoryMappings.GetFilterGroupLabel(filterGroup) : null;
         uint? equipSlotCategoryId = item.EquipSlotCategory.RowId == 0 ? null : (uint?)item.EquipSlotCategory.RowId;
@@ -87,6 +114,9 @@ public sealed class ItemClassificationService
 
         return new ItemClassificationResult
         {
+            ItemId = itemId,
+            IconId = item.Icon == 0 ? null : (uint?)item.Icon,
+            Rarity = item.Rarity == 0 ? null : (uint?)item.Rarity,
             FilterGroupId = filterGroupId,
             FilterGroupLabel = filterGroupLabel,
             EquipSlotCategoryId = equipSlotCategoryId,

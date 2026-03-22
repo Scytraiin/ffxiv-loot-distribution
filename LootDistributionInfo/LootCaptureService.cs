@@ -5,6 +5,7 @@ using System.Linq;
 using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
 
 using Lumina.Text.ReadOnly;
@@ -113,7 +114,7 @@ public sealed class LootCaptureService : IDisposable
             return;
         }
 
-        this.ProcessIncomingText(flattenedMessage, LootCaptureSource.ChatMessage);
+        this.ProcessIncomingText(flattenedMessage, LootCaptureSource.ChatMessage, message);
     }
 
     private void OnLogMessage(ILogMessage message)
@@ -125,7 +126,7 @@ public sealed class LootCaptureService : IDisposable
         this.ProcessIncomingText(formattedMessage.ExtractText(), LootCaptureSource.LogMessage);
     }
 
-    private void ProcessIncomingText(string rawText, LootCaptureSource source)
+    private void ProcessIncomingText(string rawText, LootCaptureSource source, SeString? message = null)
     {
         this.ExpirePendingRollSessions(DateTimeOffset.UtcNow);
 
@@ -134,7 +135,7 @@ public sealed class LootCaptureService : IDisposable
             return;
         }
 
-        this.TryCaptureLoot(rawText, source);
+        this.TryCaptureLoot(rawText, source, message);
     }
 
     private bool TryCaptureRoll(string rawText, LootCaptureSource source)
@@ -171,7 +172,7 @@ public sealed class LootCaptureService : IDisposable
         return true;
     }
 
-    private void TryCaptureLoot(string rawText, LootCaptureSource source)
+    private void TryCaptureLoot(string rawText, LootCaptureSource source, SeString? message)
     {
         var parsedLoot = LootMatcher.TryMatch(rawText);
         if (parsedLoot is null)
@@ -180,7 +181,7 @@ public sealed class LootCaptureService : IDisposable
             return;
         }
 
-        var matchedRecord = this.BuildRecord(parsedLoot, source);
+        var matchedRecord = this.BuildRecord(parsedLoot, source, message);
         this.Debug("Matcher", $"Matched {source}: who={matchedRecord.WhoName ?? "<unknown>"} ({matchedRecord.WhoConfidence}), loot={matchedRecord.LootText ?? "<unknown>"}.");
 
         var matchedRollSession = this.pendingRollTracker.TryResolve(matchedRecord.LootText ?? matchedRecord.RawText, matchedRecord.ZoneName, matchedRecord.CapturedAtUtc, RollCorrelationWindow);
@@ -253,10 +254,11 @@ public sealed class LootCaptureService : IDisposable
             .ToHashSet(StringComparer.Ordinal);
     }
 
-    private LootRecord BuildRecord(LootParseResult parsedLoot, LootCaptureSource source)
+    private LootRecord BuildRecord(LootParseResult parsedLoot, LootCaptureSource source, SeString? message)
     {
         var (whoName, confidence) = this.ResolveWho(parsedLoot.SubjectText);
-        var itemClassification = this.itemClassificationService.Classify(parsedLoot.LootText);
+        var itemPayload = this.TryExtractItemPayload(message);
+        var itemClassification = this.itemClassificationService.Classify(parsedLoot.LootText, itemPayload?.ItemId);
 
         var record = new LootRecord
         {
@@ -265,6 +267,10 @@ public sealed class LootCaptureService : IDisposable
             RawText = parsedLoot.RawText,
             WhoName = whoName,
             LootText = parsedLoot.LootText,
+            ItemId = itemClassification.ItemId ?? itemPayload?.ItemId,
+            IconId = itemClassification.IconId,
+            Rarity = itemClassification.Rarity,
+            IsHighQuality = itemPayload?.IsHighQuality ?? ContainsHighQualityMarker(parsedLoot.RawText, parsedLoot.LootText),
             ItemCategoryLabel = itemClassification.ItemCategoryLabel,
             FilterGroupId = itemClassification.FilterGroupId,
             FilterGroupLabel = itemClassification.FilterGroupLabel,
@@ -331,6 +337,30 @@ public sealed class LootCaptureService : IDisposable
         return string.IsNullOrWhiteSpace(flattened) ? message.TextValue.Trim() : flattened;
     }
 
+    private ItemPayloadMatch? TryExtractItemPayload(SeString? message)
+    {
+        if (message is null)
+        {
+            return null;
+        }
+
+        foreach (var payload in message.Payloads)
+        {
+            if (payload is ItemPayload itemPayload)
+            {
+                return new ItemPayloadMatch(itemPayload.ItemId, ContainsHighQualityMarker(message.TextValue, itemPayload.DisplayName), itemPayload.DisplayName);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ContainsHighQualityMarker(string rawText, string? lootText)
+    {
+        return rawText.Contains(" HQ", StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrWhiteSpace(lootText) && lootText.Contains(" HQ", StringComparison.OrdinalIgnoreCase));
+    }
+
     private void ExpirePendingRollSessions(DateTimeOffset now)
     {
         foreach (var expiredSession in this.pendingRollTracker.Expire(now, RollCorrelationWindow))
@@ -338,4 +368,6 @@ public sealed class LootCaptureService : IDisposable
             this.Debug("Roll expire", $"Expired unresolved rolls for {expiredSession.NormalizedItemName} in {expiredSession.ZoneName}.");
         }
     }
+
+    private sealed record ItemPayloadMatch(uint ItemId, bool IsHighQuality, string? DisplayName);
 }

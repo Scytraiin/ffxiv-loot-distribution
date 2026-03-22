@@ -30,6 +30,7 @@ public sealed class Plugin : IDalamudPlugin
         IDataManager dataManager,
         IPlayerState playerState,
         IPartyList partyList,
+        ITextureProvider textureProvider,
         IPluginLog log)
     {
         this.pluginInterface = pluginInterface;
@@ -39,7 +40,7 @@ public sealed class Plugin : IDalamudPlugin
         this.configuration.Initialize(this.pluginInterface);
         this.lootCaptureService = new LootCaptureService(this.configuration, chatGui, clientState, dataManager, playerState, partyList, log);
 
-        this.mainWindow = new MainWindow(this.lootCaptureService, this.OpenConfigUi, this.OpenDebugUi);
+        this.mainWindow = new MainWindow(this.lootCaptureService, this.configuration, textureProvider, this.OpenConfigUi, this.OpenDebugUi);
         this.configWindow = new ConfigWindow(this.configuration, this.lootCaptureService, this.OpenDebugUi);
         this.debugWindow = new DebugWindow(this.lootCaptureService);
 

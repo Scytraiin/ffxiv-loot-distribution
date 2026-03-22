@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Numerics;
 
 using Dalamud.Bindings.ImGui;
@@ -18,7 +19,7 @@ public sealed class ConfigWindow : Window, IDisposable
         this.configuration = configuration;
         this.lootCaptureService = lootCaptureService;
         this.openDebugUi = openDebugUi;
-        this.Size = new Vector2(460, 220);
+        this.Size = new Vector2(560, 420);
         this.SizeCondition = ImGuiCond.FirstUseEver;
     }
 
@@ -31,6 +32,9 @@ public sealed class ConfigWindow : Window, IDisposable
         var retainHistory = this.configuration.RetainHistoryBetweenSessions;
         var maxEntries = this.configuration.MaxEntries;
         var debugModeEnabled = this.configuration.DebugModeEnabled;
+        var showItemIcons = this.configuration.ShowItemIcons;
+        var showItemTooltips = this.configuration.ShowItemTooltips;
+        var showOnlySelfLoot = this.configuration.ShowOnlySelfLoot;
         var changed = false;
 
         if (ImGui.Checkbox("Save history between sessions", ref retainHistory))
@@ -51,6 +55,24 @@ public sealed class ConfigWindow : Window, IDisposable
             changed = true;
         }
 
+        if (ImGui.Checkbox("Show item icons", ref showItemIcons))
+        {
+            this.configuration.ShowItemIcons = showItemIcons;
+            changed = true;
+        }
+
+        if (ImGui.Checkbox("Show item tooltips", ref showItemTooltips))
+        {
+            this.configuration.ShowItemTooltips = showItemTooltips;
+            changed = true;
+        }
+
+        if (ImGui.Checkbox("Default to self-only filter", ref showOnlySelfLoot))
+        {
+            this.configuration.ShowOnlySelfLoot = showOnlySelfLoot;
+            changed = true;
+        }
+
         if (changed)
         {
             this.lootCaptureService.ApplyConfigurationChanges();
@@ -65,6 +87,46 @@ public sealed class ConfigWindow : Window, IDisposable
             if (ImGui.Button("Open debug log"))
             {
                 this.openDebugUi();
+            }
+        }
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Blacklisted items");
+
+        var blacklistedItems = this.configuration.BlacklistedItemIds
+            .Distinct()
+            .OrderBy(itemId => itemId)
+            .Select(itemId => new
+            {
+                ItemId = itemId,
+                Label = this.lootCaptureService.Records
+                    .FirstOrDefault(record => record.ItemId == itemId)?
+                    .ResolvedItemName
+                    ?? this.lootCaptureService.Records.FirstOrDefault(record => record.ItemId == itemId)?.LootText
+                    ?? $"Item #{itemId}",
+            })
+            .ToList();
+
+        if (blacklistedItems.Count == 0)
+        {
+            ImGui.TextDisabled("No blacklisted items yet.");
+        }
+        else
+        {
+            foreach (var item in blacklistedItems)
+            {
+                ImGui.PushID((int)item.ItemId);
+                ImGui.TextUnformatted($"{item.Label} ({item.ItemId})");
+                ImGui.SameLine();
+                if (ImGui.Button("Remove"))
+                {
+                    this.configuration.BlacklistedItemIds.Remove(item.ItemId);
+                    this.configuration.Save();
+                }
+
+                ImGui.PopID();
             }
         }
     }

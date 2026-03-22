@@ -2,6 +2,12 @@ namespace LootDistributionInfo;
 
 public sealed class ItemClassificationResult
 {
+    public uint? ItemId { get; init; }
+
+    public uint? IconId { get; init; }
+
+    public uint? Rarity { get; init; }
+
     public byte? FilterGroupId { get; init; }
 
     public string? FilterGroupLabel { get; init; }
