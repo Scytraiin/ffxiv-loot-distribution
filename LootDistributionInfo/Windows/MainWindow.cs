@@ -194,13 +194,13 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.TextUnformatted(record.CapturedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
 
             ImGui.TableSetColumnIndex(1);
-            ImGui.TextWrapped(string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName);
+            this.DrawTruncatedCellText(string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName);
 
             ImGui.TableSetColumnIndex(2);
-            ImGui.TextWrapped(record.WhoName ?? "Unknown");
+            this.DrawTruncatedCellText(record.WhoName ?? "Unknown");
 
             ImGui.TableSetColumnIndex(3);
-            ImGui.TextWrapped(GetGroupLabel(record.WhoConfidence));
+            this.DrawTruncatedCellText(GetGroupLabel(record.WhoConfidence));
 
             ImGui.TableSetColumnIndex(4);
             this.DrawIconCell(record, "history");
@@ -209,10 +209,10 @@ public sealed class MainWindow : Window, IDisposable
             this.DrawLootCell(record, "history");
 
             ImGui.TableSetColumnIndex(6);
-            ImGui.TextWrapped(record.RollsText);
+            this.DrawTruncatedCellText(record.RollsText);
 
             ImGui.TableSetColumnIndex(7);
-            ImGui.TextWrapped(record.RawText);
+            this.DrawTruncatedCellText(record.RawText);
 
             ImGui.TableSetColumnIndex(8);
             this.DrawCopyButton(record, "history");
@@ -265,13 +265,13 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.TextUnformatted(record.CapturedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
 
             ImGui.TableSetColumnIndex(1);
-            ImGui.TextWrapped(string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName);
+            this.DrawTruncatedCellText(string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName);
 
             ImGui.TableSetColumnIndex(2);
-            ImGui.TextWrapped(record.WhoName ?? "Unknown");
+            this.DrawTruncatedCellText(record.WhoName ?? "Unknown");
 
             ImGui.TableSetColumnIndex(3);
-            ImGui.TextWrapped(GetGroupLabel(record.WhoConfidence));
+            this.DrawTruncatedCellText(GetGroupLabel(record.WhoConfidence));
 
             ImGui.TableSetColumnIndex(4);
             this.DrawIconCell(record, "details");
@@ -280,28 +280,28 @@ public sealed class MainWindow : Window, IDisposable
             this.DrawLootCell(record, "details");
 
             ImGui.TableSetColumnIndex(6);
-            ImGui.TextWrapped(record.ItemCategoryLabel ?? "Unknown");
+            this.DrawTruncatedCellText(record.ItemCategoryLabel ?? "Unknown");
 
             ImGui.TableSetColumnIndex(7);
-            ImGui.TextWrapped(FormatLabelWithId(record.FilterGroupLabel, record.FilterGroupId));
+            this.DrawTruncatedCellText(FormatLabelWithId(record.FilterGroupLabel, record.FilterGroupId));
 
             ImGui.TableSetColumnIndex(8);
-            ImGui.TextWrapped(FormatLabelWithId(record.EquipSlotCategoryLabel, record.EquipSlotCategoryId));
+            this.DrawTruncatedCellText(FormatLabelWithId(record.EquipSlotCategoryLabel, record.EquipSlotCategoryId));
 
             ImGui.TableSetColumnIndex(9);
-            ImGui.TextUnformatted(FormatOptional(record.ItemUICategoryId));
+            this.DrawTruncatedCellText(FormatOptional(record.ItemUICategoryId));
 
             ImGui.TableSetColumnIndex(10);
-            ImGui.TextUnformatted(FormatOptional(record.ItemSearchCategoryId));
+            this.DrawTruncatedCellText(FormatOptional(record.ItemSearchCategoryId));
 
             ImGui.TableSetColumnIndex(11);
-            ImGui.TextUnformatted(FormatOptional(record.ItemSortCategoryId));
+            this.DrawTruncatedCellText(FormatOptional(record.ItemSortCategoryId));
 
             ImGui.TableSetColumnIndex(12);
-            ImGui.TextWrapped(record.RollsText);
+            this.DrawTruncatedCellText(record.RollsText);
 
             ImGui.TableSetColumnIndex(13);
-            ImGui.TextWrapped(record.RawText);
+            this.DrawTruncatedCellText(record.RawText);
 
             ImGui.TableSetColumnIndex(14);
             this.DrawCopyButton(record, "details");
@@ -465,28 +465,45 @@ public sealed class MainWindow : Window, IDisposable
             label = $"{label} HQ";
         }
 
-        this.DrawColoredItemText(record, label);
-        this.DrawTooltipAndContext(record, $"{scope}-loot");
+        var truncated = this.DrawColoredItemText(record, label);
+        this.DrawTooltipAndContext(record, $"{scope}-loot", truncated);
     }
 
-    private void DrawColoredItemText(LootRecord record, string label)
+    private bool DrawColoredItemText(LootRecord record, string label)
     {
+        var displayText = GetTruncatedDisplayText(label, this.GetAvailableCellTextWidth(), out var truncated);
+
         if (record.Rarity is uint rarity)
         {
             ImGui.PushStyleColor(ImGuiCol.Text, GetRarityColor(rarity));
-            ImGui.TextWrapped(label);
+            ImGui.TextUnformatted(displayText);
             ImGui.PopStyleColor();
-            return;
+            return truncated;
         }
 
-        ImGui.TextWrapped(label);
+        ImGui.TextUnformatted(displayText);
+        return truncated;
     }
 
-    private void DrawTooltipAndContext(LootRecord record, string scope)
+    private void DrawTooltipAndContext(LootRecord record, string scope, bool textWasTruncated = false)
     {
-        if (this.configuration.ShowItemTooltips && ImGui.IsItemHovered())
+        if (ImGui.IsItemHovered())
         {
-            this.DrawItemTooltip(record);
+            if (textWasTruncated)
+            {
+                if (this.configuration.ShowItemTooltips)
+                {
+                    this.DrawItemTooltip(record);
+                }
+                else
+                {
+                    this.DrawTextTooltip(record.ResolvedItemName ?? record.LootText ?? record.RawText);
+                }
+            }
+            else if (this.configuration.ShowItemTooltips && scope.Contains("-icon", StringComparison.Ordinal))
+            {
+                this.DrawItemTooltip(record);
+            }
         }
 
         if (ImGui.BeginPopupContextItem($"##record-context-{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{record.RawText.GetHashCode()}"))
@@ -543,11 +560,29 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.EndTooltip();
     }
 
+    private void DrawTextTooltip(string text)
+    {
+        ImGui.BeginTooltip();
+        ImGui.TextUnformatted(text);
+        ImGui.EndTooltip();
+    }
+
     private void DrawCopyButton(LootRecord record, string scope)
     {
         if (ImGui.SmallButton($"Copy##{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{record.RawText.GetHashCode()}"))
         {
             ImGui.SetClipboardText(this.BuildClipboardLine(record));
+        }
+    }
+
+    private void DrawTruncatedCellText(string text)
+    {
+        var displayText = GetTruncatedDisplayText(text, this.GetAvailableCellTextWidth(), out var truncated);
+        ImGui.TextUnformatted(displayText);
+
+        if (truncated && ImGui.IsItemHovered())
+        {
+            this.DrawTextTooltip(text);
         }
     }
 
@@ -691,6 +726,62 @@ public sealed class MainWindow : Window, IDisposable
     private static string FormatOptional(object? value)
     {
         return value?.ToString() ?? string.Empty;
+    }
+
+    private float GetAvailableCellTextWidth()
+    {
+        return MathF.Max(1f, ImGui.GetContentRegionAvail().X);
+    }
+
+    private static string GetTruncatedDisplayText(string text, float maxWidth, out bool truncated)
+    {
+        var normalized = NormalizeInlineText(text);
+        if (string.IsNullOrEmpty(normalized))
+        {
+            truncated = false;
+            return string.Empty;
+        }
+
+        if (ImGui.CalcTextSize(normalized).X <= maxWidth)
+        {
+            truncated = false;
+            return normalized;
+        }
+
+        const string ellipsis = "...";
+        var ellipsisWidth = ImGui.CalcTextSize(ellipsis).X;
+        if (ellipsisWidth >= maxWidth)
+        {
+            truncated = true;
+            return ellipsis;
+        }
+
+        var low = 0;
+        var high = normalized.Length;
+        while (low < high)
+        {
+            var mid = (low + high + 1) / 2;
+            var candidate = normalized[..mid] + ellipsis;
+            if (ImGui.CalcTextSize(candidate).X <= maxWidth)
+            {
+                low = mid;
+            }
+            else
+            {
+                high = mid - 1;
+            }
+        }
+
+        truncated = true;
+        return low <= 0 ? ellipsis : normalized[..low] + ellipsis;
+    }
+
+    private static string NormalizeInlineText(string text)
+    {
+        return text
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Trim();
     }
 
     private static Vector4 GetRarityColor(uint rarity)
