@@ -108,7 +108,7 @@ Current state:
 - custom repo metadata exists
 - Docker validation exists
 - release-ready artifacts can be exported to `out/release`
-- the current release target is `v0.1.1-alpha`
+- the current release target is `v0.1.3-alpha`
 
 For plugin-specific details, see:
 
