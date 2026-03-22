@@ -4,6 +4,7 @@ using System.Linq;
 
 using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 
 using Lumina.Text.ReadOnly;
@@ -14,6 +15,7 @@ namespace LootDistributionInfo;
 public sealed class LootCaptureService : IDisposable
 {
     private static readonly TimeSpan DedupeWindow = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan RollCorrelationWindow = TimeSpan.FromMinutes(5);
 
     private readonly Configuration configuration;
     private readonly IChatGui chatGui;
@@ -21,9 +23,10 @@ public sealed class LootCaptureService : IDisposable
     private readonly IDataManager dataManager;
     private readonly IPlayerState playerState;
     private readonly IPartyList partyList;
-    private readonly IPluginLog log;
     private readonly LootHistory history;
     private readonly DebugEventBuffer debugEventBuffer;
+    private readonly PendingRollTracker pendingRollTracker;
+    private string currentZoneName;
 
     public LootCaptureService(
         Configuration configuration,
@@ -40,9 +43,10 @@ public sealed class LootCaptureService : IDisposable
         this.dataManager = dataManager;
         this.playerState = playerState;
         this.partyList = partyList;
-        this.log = log;
         this.history = new LootHistory(this.configuration.RetainHistoryBetweenSessions ? this.configuration.StoredRecords : []);
         this.debugEventBuffer = new DebugEventBuffer();
+        this.pendingRollTracker = new PendingRollTracker();
+        this.currentZoneName = this.ResolveZoneName(this.clientState.TerritoryType);
         this.history.Trim(this.configuration.MaxEntries);
 
         // The plugin listens to both user-visible chat and raw log messages because some loot lines
@@ -51,6 +55,7 @@ public sealed class LootCaptureService : IDisposable
         this.chatGui.LogMessage += this.OnLogMessage;
         this.clientState.TerritoryChanged += this.OnTerritoryChanged;
         this.PersistHistory();
+        log.Information("Loot Distribution Info initialized.");
         this.Debug("Startup", "Plugin initialized.");
     }
 
@@ -97,7 +102,8 @@ public sealed class LootCaptureService : IDisposable
 
     private void OnChatMessage(XivChatType type, int timestamp, ref Dalamud.Game.Text.SeStringHandling.SeString sender, ref Dalamud.Game.Text.SeStringHandling.SeString message, ref bool isHandled)
     {
-        this.Debug("Chat", $"Received {type}: {message.TextValue}");
+        var flattenedMessage = this.FlattenMessageText(message);
+        this.Debug("Chat", $"Received {type}: {flattenedMessage}");
 
         if (type is not (XivChatType.Notice or XivChatType.SystemMessage or XivChatType.GatheringSystemMessage))
         {
@@ -105,7 +111,7 @@ public sealed class LootCaptureService : IDisposable
             return;
         }
 
-        this.TryCapture(message.TextValue, LootCaptureSource.ChatMessage);
+        this.ProcessIncomingText(flattenedMessage, LootCaptureSource.ChatMessage);
     }
 
     private void OnLogMessage(ILogMessage message)
@@ -114,27 +120,77 @@ public sealed class LootCaptureService : IDisposable
         // broad wildcard-style filter used for visible chat text.
         ReadOnlySeString formattedMessage = message.FormatLogMessageForDebugging();
         this.Debug("Log", $"Received log message: {formattedMessage.ExtractText()}");
-        this.TryCapture(formattedMessage.ExtractText(), LootCaptureSource.LogMessage);
+        this.ProcessIncomingText(formattedMessage.ExtractText(), LootCaptureSource.LogMessage);
     }
 
-    private void TryCapture(string rawText, LootCaptureSource source)
+    private void ProcessIncomingText(string rawText, LootCaptureSource source)
     {
-        var matchedRecord = LootMatcher.TryMatch(
-            rawText,
-            source,
-            DateTimeOffset.UtcNow,
-            this.GetLocalPlayerName(),
-            this.GetKnownPartyAndAllianceNames());
+        this.ExpirePendingRollSessions(DateTimeOffset.UtcNow);
 
-        if (matchedRecord is null)
+        if (this.TryCaptureRoll(rawText, source))
+        {
+            return;
+        }
+
+        this.TryCaptureLoot(rawText, source);
+    }
+
+    private bool TryCaptureRoll(string rawText, LootCaptureSource source)
+    {
+        var parsedRoll = LootRollMatcher.TryMatch(rawText);
+        if (parsedRoll is null)
+        {
+            this.Debug("Roll parser", $"Missed {source}: {rawText}");
+            return false;
+        }
+
+        parsedRoll.CapturedAtUtc = DateTimeOffset.UtcNow;
+        parsedRoll.PlayerName = this.ResolveRollPlayerName(parsedRoll.PlayerName);
+        parsedRoll.Normalize();
+
+        var result = this.pendingRollTracker.AddRoll(parsedRoll, this.currentZoneName, RollCorrelationWindow, DedupeWindow);
+        switch (result)
+        {
+            case PendingRollAddResult.Duplicate:
+                this.Debug("Roll dedupe", $"Skipped duplicate roll from {source}: {parsedRoll.RawText}");
+                break;
+
+            case PendingRollAddResult.CreatedSession:
+                this.Debug("Roll session", $"Created session for {parsedRoll.ItemName} in {this.currentZoneName}.");
+                this.Debug("Roll parser", $"Matched {source}: {parsedRoll.ToSummaryText()} on {parsedRoll.ItemName}.");
+                break;
+
+            case PendingRollAddResult.AddedToExistingSession:
+                this.Debug("Roll session", $"Added roll to session for {parsedRoll.ItemName}: {parsedRoll.ToSummaryText()}.");
+                this.Debug("Roll parser", $"Matched {source}: {parsedRoll.ToSummaryText()} on {parsedRoll.ItemName}.");
+                break;
+        }
+
+        return true;
+    }
+
+    private void TryCaptureLoot(string rawText, LootCaptureSource source)
+    {
+        var parsedLoot = LootMatcher.TryMatch(rawText);
+        if (parsedLoot is null)
         {
             this.Debug("Matcher", $"Missed {source}: {rawText}");
             return;
         }
 
-        matchedRecord.ZoneName = this.ResolveCurrentZoneName();
-        matchedRecord.Normalize();
+        var matchedRecord = this.BuildRecord(parsedLoot, source);
         this.Debug("Matcher", $"Matched {source}: who={matchedRecord.WhoName ?? "<unknown>"} ({matchedRecord.WhoConfidence}), loot={matchedRecord.LootText ?? "<unknown>"}.");
+
+        var matchedRollSession = this.pendingRollTracker.TryResolve(matchedRecord.LootText ?? matchedRecord.RawText, matchedRecord.ZoneName, matchedRecord.CapturedAtUtc, RollCorrelationWindow);
+        if (matchedRollSession is not null)
+        {
+            matchedRecord.AttachRolls(matchedRollSession.Entries);
+            this.Debug("Roll correlate", $"Attached {matchedRollSession.Entries.Count} roll(s) to {matchedRecord.LootText ?? matchedRecord.RawText}.");
+        }
+        else
+        {
+            this.Debug("Roll correlate", $"No rolls matched for {matchedRecord.LootText ?? matchedRecord.RawText}.");
+        }
 
         // Dedupe keeps the shared chat/log pipeline from storing the same loot line twice when both
         // hooks observe the same event within a small timing window.
@@ -144,7 +200,6 @@ public sealed class LootCaptureService : IDisposable
             return;
         }
 
-        this.log.Verbose("Captured loot line from {Source}: {Text}", source, matchedRecord.RawText);
         this.Debug("History", $"Stored loot event in {matchedRecord.ZoneName}: {matchedRecord.RawText}");
         this.PersistHistory();
     }
@@ -155,20 +210,13 @@ public sealed class LootCaptureService : IDisposable
             ? this.history.Snapshot()
             : [];
 
-        // Retention trimming is applied before every save so config size stays bounded even after
-        // setting changes or older persisted data is loaded from a previous plugin version.
-        this.configuration.Normalize();
         this.configuration.Save();
     }
 
     private void OnTerritoryChanged(ushort territoryType)
     {
-        this.Debug("Zone", $"Entered {this.ResolveZoneName(territoryType)} ({territoryType}).");
-    }
-
-    private string ResolveCurrentZoneName()
-    {
-        return this.ResolveZoneName(this.clientState.TerritoryType);
+        this.currentZoneName = this.ResolveZoneName(territoryType);
+        this.Debug("Zone", $"Entered {this.currentZoneName} ({territoryType}).");
     }
 
     private string ResolveZoneName(ushort territoryType)
@@ -194,11 +242,64 @@ public sealed class LootCaptureService : IDisposable
             : null;
     }
 
-    private IEnumerable<string> GetKnownPartyAndAllianceNames()
+    private HashSet<string> GetKnownPartyAndAllianceNames()
     {
         return this.partyList
             .Select(member => member.Name.TextValue)
-            .Where(name => !string.IsNullOrWhiteSpace(name));
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(LootMatcher.NormalizeForNameMatch)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private LootRecord BuildRecord(LootParseResult parsedLoot, LootCaptureSource source)
+    {
+        var (whoName, confidence) = this.ResolveWho(parsedLoot.SubjectText);
+
+        var record = new LootRecord
+        {
+            CapturedAtUtc = DateTimeOffset.UtcNow,
+            ZoneName = this.currentZoneName,
+            RawText = parsedLoot.RawText,
+            WhoName = whoName,
+            LootText = parsedLoot.LootText,
+            WhoConfidence = confidence,
+            Source = source,
+        };
+
+        record.Normalize();
+        return record;
+    }
+
+    private string ResolveRollPlayerName(string playerName)
+    {
+        return string.Equals(playerName, "You", StringComparison.OrdinalIgnoreCase)
+            ? this.GetLocalPlayerName() ?? "You"
+            : playerName.Trim();
+    }
+
+    private (string? WhoName, LootWhoConfidence Confidence) ResolveWho(string? subjectText)
+    {
+        if (string.IsNullOrWhiteSpace(subjectText))
+        {
+            return (null, LootWhoConfidence.Unknown);
+        }
+
+        if (string.Equals(subjectText, "You", StringComparison.OrdinalIgnoreCase))
+        {
+            return (this.GetLocalPlayerName() ?? "You", LootWhoConfidence.Self);
+        }
+
+        if (!LootMatcher.LooksLikeTwoWordName(subjectText))
+        {
+            return (null, LootWhoConfidence.Unknown);
+        }
+
+        var normalizedCandidate = LootMatcher.NormalizeForNameMatch(subjectText);
+        var confidence = this.GetKnownPartyAndAllianceNames().Contains(normalizedCandidate)
+            ? LootWhoConfidence.PartyOrAllianceVerified
+            : LootWhoConfidence.TextOnly;
+
+        return (subjectText, confidence);
     }
 
     private void Debug(string eventName, string details)
@@ -208,6 +309,20 @@ public sealed class LootCaptureService : IDisposable
             return;
         }
 
-        this.debugEventBuffer.Add(this.ResolveCurrentZoneName(), eventName, details);
+        this.debugEventBuffer.Add(this.currentZoneName, eventName, details);
+    }
+
+    private string FlattenMessageText(SeString message)
+    {
+        var flattened = SeStringDisplayText.Flatten(message);
+        return string.IsNullOrWhiteSpace(flattened) ? message.TextValue.Trim() : flattened;
+    }
+
+    private void ExpirePendingRollSessions(DateTimeOffset now)
+    {
+        foreach (var expiredSession in this.pendingRollTracker.Expire(now, RollCorrelationWindow))
+        {
+            this.Debug("Roll expire", $"Expired unresolved rolls for {expiredSession.NormalizedItemName} in {expiredSession.ZoneName}.");
+        }
     }
 }

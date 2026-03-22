@@ -5,19 +5,19 @@
     "Description": "Keeps a searchable history of loot messages, including the zone and recipient.",
     "Punchline": "Track who received loot and where it happened.",
     "InternalName": "LootDistributionInfo",
-    "AssemblyVersion": "0.0.2.0",
-    "TestingAssemblyVersion": "0.0.2.0",
+    "AssemblyVersion": "0.1.1.0",
+    "TestingAssemblyVersion": "0.1.1.0",
     "RepoUrl": "https://github.com/Scytraiin/ffxiv-loot-distribution",
     "IconUrl": "https://raw.githubusercontent.com/Scytraiin/ffxiv-loot-distribution/main/assets/branding/Loot_History_v1.png",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 14,
     "IsHide": false,
     "IsTestingExclusive": false,
-    "LastUpdate": 1774173743,
+    "LastUpdate": 1774202505,
     "DownloadCount": 0,
-    "DownloadLinkInstall": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.2-alpha/latest.zip",
-    "DownloadLinkTesting": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.2-alpha/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.0.2-alpha/latest.zip",
-    "Changelog": "Loot History v2 alpha release."
+    "DownloadLinkInstall": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.1.1-alpha/latest.zip",
+    "DownloadLinkTesting": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.1.1-alpha/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/Scytraiin/ffxiv-loot-distribution/releases/download/v0.1.1-alpha/latest.zip",
+    "Changelog": "Loot History v0.1.1 alpha release."
   }
 ]

@@ -1,6 +1,6 @@
 # FFYIV Workspace
 
-> Workspace for a Dalamud plugin experiment centered around loot-line capture, local references, and lightweight build validation.
+> Workspace for the Loot Distribution Info Dalamud plugin, its tests, and its release tooling.
 
 ---
 
@@ -15,7 +15,6 @@ It also contains:
 - a standalone test project for the pure matching/history logic
 - a custom Dalamud repository JSON
 - Docker-based validation support
-- local reference codebases kept for research and comparison
 
 ---
 
@@ -43,23 +42,6 @@ This project contains unit tests for the pure logic:
 - `scyt.repo.json`
 
 This is the custom Dalamud repository file intended for later hosting.
-
----
-
-## Reference Material
-
-These folders are present as local references only:
-
-- `Dalamud-master/`
-- `FFXIV-ProximityVoiceChat-master/`
-
-They are **not** part of the active plugin implementation.
-
-They exist to provide:
-
-- API reference material
-- project layout examples
-- examples of larger real-world Dalamud plugin structure
 
 ---
 
@@ -111,7 +93,7 @@ docker run --rm \
 2. Run the logic tests in `LootDistributionInfo.Tests`.
 3. Use Docker for isolated validation when useful.
 4. Test the plugin in a real Dalamud game environment.
-5. Replace placeholder repo URLs before publishing.
+5. Publish `latest.zip` and `scyt.repo.json` when a release is ready.
 
 ---
 
@@ -125,7 +107,8 @@ Current state:
 - tests exist
 - custom repo metadata exists
 - Docker validation exists
-- publishing URLs are still placeholders
+- release-ready artifacts can be exported to `out/release`
+- the current release target is `v0.1.1-alpha`
 
 For plugin-specific details, see:
 

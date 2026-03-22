@@ -8,8 +8,8 @@ public sealed class LootHistoryTests
     public void TryAdd_SkipsDuplicateLinesAcrossSourcesWithinWindow()
     {
         var history = new LootHistory();
-        var first = LootMatcher.TryMatch("You obtain 368 gil.", LootCaptureSource.ChatMessage, DateTimeOffset.Parse("2026-03-11T12:00:00Z"))!;
-        var duplicate = LootMatcher.TryMatch("You obtain 368 gil.", LootCaptureSource.LogMessage, DateTimeOffset.Parse("2026-03-11T12:00:01Z"))!;
+        var first = CreateRecord("You obtain 368 gil.", LootCaptureSource.ChatMessage, "2026-03-11T12:00:00Z");
+        var duplicate = CreateRecord("You obtain 368 gil.", LootCaptureSource.LogMessage, "2026-03-11T12:00:01Z");
 
         var firstAdded = history.TryAdd(first, 500, TimeSpan.FromSeconds(2));
         var duplicateAdded = history.TryAdd(duplicate, 500, TimeSpan.FromSeconds(2));
@@ -27,7 +27,7 @@ public sealed class LootHistoryTests
         for (var i = 0; i < 3; i++)
         {
             history.TryAdd(
-                LootMatcher.TryMatch($"You obtain {i + 1} gil.", LootCaptureSource.ChatMessage, DateTimeOffset.Parse($"2026-03-11T12:00:0{i}Z"))!,
+                CreateRecord($"You obtain {i + 1} gil.", LootCaptureSource.ChatMessage, $"2026-03-11T12:00:0{i}Z"),
                 2,
                 TimeSpan.FromSeconds(2));
         }
@@ -41,11 +41,23 @@ public sealed class LootHistoryTests
     public void Clear_RemovesAllRecords()
     {
         var history = new LootHistory([
-            LootMatcher.TryMatch("You obtain 368 gil.", LootCaptureSource.ChatMessage, DateTimeOffset.Parse("2026-03-11T12:00:00Z"))!,
+            CreateRecord("You obtain 368 gil.", LootCaptureSource.ChatMessage, "2026-03-11T12:00:00Z"),
         ]);
 
         history.Clear();
 
         Assert.Empty(history.Records);
+    }
+
+    private static LootRecord CreateRecord(string rawText, LootCaptureSource source, string capturedAt)
+    {
+        var parsed = LootMatcher.TryMatch(rawText)!;
+        return new LootRecord
+        {
+            CapturedAtUtc = DateTimeOffset.Parse(capturedAt),
+            RawText = parsed.RawText,
+            LootText = parsed.LootText,
+            Source = source,
+        };
     }
 }

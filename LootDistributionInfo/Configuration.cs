@@ -10,7 +10,7 @@ namespace LootDistributionInfo;
 public sealed class Configuration : IPluginConfiguration
 {
     public const int DefaultMaxEntries = 500;
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 4;
 
     [NonSerialized]
     private IDalamudPluginInterface? pluginInterface;
@@ -28,6 +28,7 @@ public sealed class Configuration : IPluginConfiguration
     public void Initialize(IDalamudPluginInterface pluginInterface)
     {
         this.pluginInterface = pluginInterface;
+        this.MigrateFromLegacyRecords();
         this.Normalize();
     }
 
@@ -51,5 +52,34 @@ public sealed class Configuration : IPluginConfiguration
         {
             this.StoredRecords.RemoveRange(this.MaxEntries, this.StoredRecords.Count - this.MaxEntries);
         }
+    }
+
+    public void MigrateFromLegacyRecords()
+    {
+#pragma warning disable CS0618
+        foreach (var record in this.StoredRecords)
+        {
+            if (!string.IsNullOrWhiteSpace(record.PlayerName) && string.IsNullOrWhiteSpace(record.WhoName))
+            {
+                record.WhoName = NormalizeNullable(record.PlayerName);
+            }
+
+            if (!string.IsNullOrWhiteSpace(record.ItemText) && string.IsNullOrWhiteSpace(record.LootText))
+            {
+                record.LootText = NormalizeNullable(record.ItemText);
+            }
+
+            record.PlayerName = null;
+            record.ItemText = null;
+
+            record.Normalize();
+        }
+#pragma warning restore CS0618
+    }
+
+    private static string? NormalizeNullable(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }

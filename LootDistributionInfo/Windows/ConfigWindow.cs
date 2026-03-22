@@ -32,7 +32,6 @@ public sealed class ConfigWindow : Window, IDisposable
         var maxEntries = this.configuration.MaxEntries;
         var debugModeEnabled = this.configuration.DebugModeEnabled;
         var changed = false;
-        var debugModeWasEnabled = this.configuration.DebugModeEnabled;
 
         if (ImGui.Checkbox("Save history between sessions", ref retainHistory))
         {
@@ -55,11 +54,6 @@ public sealed class ConfigWindow : Window, IDisposable
         if (changed)
         {
             this.lootCaptureService.ApplyConfigurationChanges();
-
-            if (!debugModeWasEnabled && this.configuration.DebugModeEnabled)
-            {
-                this.openDebugUi();
-            }
         }
 
         ImGui.Spacing();

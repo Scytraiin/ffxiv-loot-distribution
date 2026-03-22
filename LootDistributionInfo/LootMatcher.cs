@@ -14,15 +14,7 @@ public static class LootMatcher
         " obtains ",
     ];
 
-    public static LootRecord? TryMatch(string rawText, LootCaptureSource source, DateTimeOffset capturedAtUtc)
-        => TryMatch(rawText, source, capturedAtUtc, null, null);
-
-    public static LootRecord? TryMatch(
-        string rawText,
-        LootCaptureSource source,
-        DateTimeOffset capturedAtUtc,
-        string? localPlayerName,
-        IEnumerable<string>? knownMemberNames)
+    public static LootParseResult? TryMatch(string rawText)
     {
         var trimmedText = rawText.Trim();
         if (trimmedText.Length == 0)
@@ -35,16 +27,17 @@ public static class LootMatcher
             return null;
         }
 
-        var (whoName, confidence, lootText) = SplitBestEffort(trimmedText, localPlayerName, knownMemberNames);
-
-        return new LootRecord
+        var (subjectText, lootText) = SplitBestEffort(trimmedText);
+        if (string.IsNullOrWhiteSpace(lootText))
         {
-            CapturedAtUtc = capturedAtUtc,
+            return null;
+        }
+
+        return new LootParseResult
+        {
             RawText = trimmedText,
-            WhoName = whoName,
-            WhoConfidence = confidence,
+            SubjectText = subjectText,
             LootText = lootText,
-            Source = source,
         };
     }
 
@@ -99,18 +92,10 @@ public static class LootMatcher
         return builder.ToString();
     }
 
-    private static (string? WhoName, LootWhoConfidence Confidence, string? LootText) SplitBestEffort(
-        string rawText,
-        string? localPlayerName,
-        IEnumerable<string>? knownMemberNames)
+    private static (string? SubjectText, string? LootText) SplitBestEffort(string rawText)
     {
         var paddedText = $" {rawText} ";
         var loweredText = paddedText.ToLowerInvariant();
-        var normalizedKnownNames = knownMemberNames?
-            .Select(NormalizeForNameMatch)
-            .Where(name => name.Length > 0)
-            .ToHashSet(StringComparer.Ordinal)
-            ?? [];
 
         foreach (var marker in VerbNeedles)
         {
@@ -126,40 +111,14 @@ public static class LootMatcher
             itemText = itemText.TrimEnd('.', '!', '?');
             itemText = StripLeadingArticle(itemText);
 
-            if (string.Equals(playerName, "You", StringComparison.OrdinalIgnoreCase))
-            {
-                return
-                (
-                    string.IsNullOrWhiteSpace(localPlayerName) ? "You" : localPlayerName.Trim(),
-                    LootWhoConfidence.Self,
-                    itemText.Length == 0 ? null : itemText
-                );
-            }
-
-            if (LooksLikeTwoWordName(playerName))
-            {
-                var normalizedCandidate = NormalizeForNameMatch(playerName);
-                var confidence = normalizedKnownNames.Contains(normalizedCandidate)
-                    ? LootWhoConfidence.PartyOrAllianceVerified
-                    : LootWhoConfidence.TextOnly;
-
-                return
-                (
-                    playerName,
-                    confidence,
-                    itemText.Length == 0 ? null : itemText
-                );
-            }
-
             return
             (
-                null,
-                LootWhoConfidence.Unknown,
+                playerName.Length == 0 ? null : playerName,
                 itemText.Length == 0 ? null : itemText
             );
         }
 
-        return (null, LootWhoConfidence.Unknown, null);
+        return (null, null);
     }
 
     private static string StripLeadingArticle(string itemText)
@@ -175,7 +134,7 @@ public static class LootMatcher
         return itemText;
     }
 
-    private static bool LooksLikeTwoWordName(string candidate)
+    public static bool LooksLikeTwoWordName(string candidate)
     {
         var parts = candidate.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return parts.Length == 2 && parts.All(IsLikelyNamePart);
@@ -206,7 +165,7 @@ public static class LootMatcher
         return true;
     }
 
-    private static string NormalizeForNameMatch(string value)
+    public static string NormalizeForNameMatch(string value)
     {
         return string.Join(
             ' ',

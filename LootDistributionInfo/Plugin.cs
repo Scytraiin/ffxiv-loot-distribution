@@ -56,11 +56,6 @@ public sealed class Plugin : IDalamudPlugin
         this.pluginInterface.UiBuilder.OpenMainUi += this.OpenMainUi;
         this.pluginInterface.UiBuilder.OpenConfigUi += this.OpenConfigUi;
 
-        if (this.configuration.DebugModeEnabled)
-        {
-            this.OpenDebugUi();
-        }
-
         log.Information("Loot Distribution Info initialized.");
     }
 

@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
 
 namespace LootDistributionInfo;
 
@@ -14,6 +17,8 @@ public enum LootWhoConfidence
 [Serializable]
 public sealed class LootRecord
 {
+    public const string NoRollsLabel = "No rolls";
+
     public DateTimeOffset CapturedAtUtc { get; set; }
 
     public string ZoneName { get; set; } = string.Empty;
@@ -24,41 +29,30 @@ public sealed class LootRecord
 
     public string? LootText { get; set; }
 
+    public string RollsText { get; set; } = NoRollsLabel;
+
+    public List<LootRollRecord> RollEntries { get; set; } = [];
+
     public LootWhoConfidence WhoConfidence { get; set; }
 
-    // These compatibility properties preserve older saved configs that stored PlayerName/ItemText.
-    public string? PlayerName
-    {
-        get => this.WhoName;
-        set
-        {
-            if (string.IsNullOrWhiteSpace(this.WhoName))
-            {
-                this.WhoName = value;
-            }
-        }
-    }
+    [Obsolete("Legacy config migration only.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string? PlayerName { get; set; }
 
-    public string? ItemText
-    {
-        get => this.LootText;
-        set
-        {
-            if (string.IsNullOrWhiteSpace(this.LootText))
-            {
-                this.LootText = value;
-            }
-        }
-    }
+    [Obsolete("Legacy config migration only.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string? ItemText { get; set; }
 
     public LootCaptureSource Source { get; set; }
 
     public void Normalize()
     {
+#pragma warning disable CS0618
         this.ZoneName = this.ZoneName?.Trim() ?? string.Empty;
         this.RawText = this.RawText?.Trim() ?? string.Empty;
         this.WhoName = NormalizeNullable(this.WhoName);
         this.LootText = NormalizeNullable(this.LootText);
+        this.RollEntries ??= [];
 
         if (this.WhoName is null && !string.IsNullOrWhiteSpace(this.PlayerName))
         {
@@ -69,6 +63,22 @@ public sealed class LootRecord
         {
             this.LootText = NormalizeNullable(this.ItemText);
         }
+
+        foreach (var rollEntry in this.RollEntries)
+        {
+            rollEntry.Normalize();
+        }
+
+        this.RollsText = this.RollEntries.Count == 0
+            ? NoRollsLabel
+            : string.Join("; ", this.RollEntries.Select(entry => entry.ToSummaryText()));
+#pragma warning restore CS0618
+    }
+
+    public void AttachRolls(IEnumerable<LootRollRecord> rollEntries)
+    {
+        this.RollEntries = [.. rollEntries];
+        this.Normalize();
     }
 
     private static string? NormalizeNullable(string? value)

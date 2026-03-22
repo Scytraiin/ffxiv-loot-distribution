@@ -1,6 +1,6 @@
 # Loot Distribution Info
 
-> A small Dalamud plugin that watches chat and log output for loot-acquisition lines and keeps a clean, searchable history in-game.
+> A Dalamud plugin that tracks loot messages and keeps a searchable in-game history of where the loot happened and who received it.
 
 ---
 
@@ -11,8 +11,8 @@
 | Plugin | `Loot Distribution Info` |
 | Command | `/lootinfo` |
 | Settings | `/lootinfo config` |
-| Goal | Capture lines like `You obtain ...` and show them in a simple history window |
-| Current approach | Broad wildcard-style text matching on loot verbs |
+| Goal | Capture loot messages and show `when / where / who / what` in a searchable history |
+| Current approach | Broad loot matching with zone capture and recipient verification |
 | Scope | Read-only observation through standard Dalamud services |
 
 ---
@@ -21,28 +21,37 @@
 
 - Watches `ChatMessage` and `LogMessage` through Dalamud.
 - Detects lines containing loot-style verbs such as `obtain`, `obtained`, and `obtains`.
+- Resolves the current zone and snapshots it onto each loot record.
+- Attempts to determine who got the loot, including party/alliance verification when possible.
 - Stores captured lines in memory and, by default, persists them across sessions.
 - Shows a newest-first history list in the plugin window.
 - Lets you filter the captured history and clear it when needed.
+- Offers Debug Mode with a live debug log for capture and parser activity.
 
 ## What It Does Not Do
 
 - It does not hook packets or use unsupported runtime tricks.
 - It does not suppress, rewrite, or re-print chat lines.
-- It does not attempt perfect semantic parsing yet.
-- It does not support export or multi-language matching in this first version.
+- It does not attempt perfect semantic parsing for every system line.
+- It does not support export or multi-language matching yet.
 
 ---
 
 ## How Matching Works
 
-Version 1 intentionally favors simplicity over precision.
+The matcher intentionally stays broad so it catches the common visible loot lines.
 
-The matcher normalizes each incoming line and looks for broad loot-style verbs:
+It normalizes each incoming line and looks for loot-style verbs:
 
 - `obtain`
 - `obtained`
 - `obtains`
+
+It then tries to enrich the match with:
+
+- the current zone
+- the recipient name
+- a cleaned loot text
 
 That means it should catch common lines such as:
 
@@ -50,7 +59,7 @@ That means it should catch common lines such as:
 - `You obtain a bottle of desert saffron.`
 - `Player X obtains a loot item.`
 
-Because the matching is intentionally broad, some false positives are possible. That tradeoff is deliberate for the first release.
+Because the matching is intentionally broad, some false positives are still possible. The raw line is always kept as fallback context.
 
 ---
 
@@ -59,9 +68,10 @@ Because the matching is intentionally broad, some false positives are possible. 
 ### Main Window
 
 - Run `/lootinfo` to open the plugin window.
-- The main view shows captured loot-like lines in a newest-first list.
+- The main view shows captured loot records in a newest-first list.
 - Use the filter field to narrow the list.
 - Use `Clear history` to wipe the current captured history.
+- When parsing is incomplete, the raw line remains visible so the event is still readable.
 
 ### Settings
 
@@ -69,8 +79,9 @@ Run `/lootinfo config` to open the settings window.
 
 Available settings:
 
-- `Retain history between sessions`
-- `Max stored entries`
+- `Save history between sessions`
+- `History size`
+- `Show debug tools`
 
 ---
 
@@ -80,18 +91,17 @@ The workspace root contains a custom repository file:
 
 - `scyt.repo.json`
 
-That file is meant to be hosted later and added to Dalamud as a custom plugin repository.
-
 Current state:
 
 - the repository URL points to the real GitHub repository
-- the custom repo JSON currently targets the alpha release asset
+- the custom repo JSON targets the current alpha release asset
 - the release asset must be uploaded as `latest.zip`
+- the icon asset is `assets/branding/Loot_History_v1.png`
 
 Current release target:
 
 - repo: `https://github.com/Scytraiin/ffxiv-loot-distribution`
-- tag: `v0.0.2-alpha`
+- tag: `v0.1.1-alpha`
 - asset: `latest.zip`
 
 ---
@@ -189,8 +199,8 @@ For now, release packaging is intentionally kept out of GitHub Actions.
 Reason:
 
 - `Dalamud.NET.Sdk` packaging depends on a real Dalamud `Hooks/dev` environment
-- the reference repo in this workspace does not provide a reusable GitHub Actions solution for that
-- forcing a self-hosted Windows runner adds operational overhead before the plugin itself is stable
+- GitHub-hosted CI is great for tests and validation, but not enough for the final plugin package by itself
+- keeping release packaging manual keeps the workflow predictable
 
 Recommended flow:
 
@@ -226,6 +236,7 @@ The current test project covers:
 
 - positive matcher cases
 - negative matcher cases
+- recipient parsing and verification confidence
 - dedupe behavior across chat/log capture
 - retention trimming
 - metadata alignment between `scyt.repo.json` and `LootDistributionInfo.json`
@@ -241,12 +252,10 @@ The current test project covers:
 
 ## Current Status
 
-This project is in a pragmatic v1 state:
+This project is in an active alpha release state:
 
-- the plugin structure exists
-- the capture logic exists
-- the custom repo metadata exists
-- Docker-based validation exists
-- publishing URLs are still placeholders
-
-That makes it ready for iterative testing, not final public release.
+- the loot history UI is implemented
+- zone and recipient enrichment are implemented
+- Debug Mode is implemented
+- Docker-based validation is working
+- release artifacts can be generated locally and uploaded to GitHub Releases
