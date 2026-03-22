@@ -26,6 +26,7 @@ public sealed class LootCaptureService : IDisposable
     private readonly LootHistory history;
     private readonly DebugEventBuffer debugEventBuffer;
     private readonly PendingRollTracker pendingRollTracker;
+    private readonly ItemClassificationService itemClassificationService;
     private string currentZoneName;
 
     public LootCaptureService(
@@ -46,6 +47,7 @@ public sealed class LootCaptureService : IDisposable
         this.history = new LootHistory(this.configuration.RetainHistoryBetweenSessions ? this.configuration.StoredRecords : []);
         this.debugEventBuffer = new DebugEventBuffer();
         this.pendingRollTracker = new PendingRollTracker();
+        this.itemClassificationService = new ItemClassificationService(this.dataManager);
         this.currentZoneName = this.ResolveZoneName(this.clientState.TerritoryType);
         this.history.Trim(this.configuration.MaxEntries);
 
@@ -254,6 +256,7 @@ public sealed class LootCaptureService : IDisposable
     private LootRecord BuildRecord(LootParseResult parsedLoot, LootCaptureSource source)
     {
         var (whoName, confidence) = this.ResolveWho(parsedLoot.SubjectText);
+        var itemClassification = this.itemClassificationService.Classify(parsedLoot.LootText);
 
         var record = new LootRecord
         {
@@ -262,6 +265,16 @@ public sealed class LootCaptureService : IDisposable
             RawText = parsedLoot.RawText,
             WhoName = whoName,
             LootText = parsedLoot.LootText,
+            ItemCategoryLabel = itemClassification.ItemCategoryLabel,
+            FilterGroupId = itemClassification.FilterGroupId,
+            FilterGroupLabel = itemClassification.FilterGroupLabel,
+            EquipSlotCategoryId = itemClassification.EquipSlotCategoryId,
+            EquipSlotCategoryLabel = itemClassification.EquipSlotCategoryLabel,
+            ItemUICategoryId = itemClassification.ItemUICategoryId,
+            ItemSearchCategoryId = itemClassification.ItemSearchCategoryId,
+            ItemSortCategoryId = itemClassification.ItemSortCategoryId,
+            ResolvedItemName = itemClassification.ResolvedItemName,
+            ClassificationSource = itemClassification.ClassificationSource,
             WhoConfidence = confidence,
             Source = source,
         };

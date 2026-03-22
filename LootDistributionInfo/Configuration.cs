@@ -10,7 +10,7 @@ namespace LootDistributionInfo;
 public sealed class Configuration : IPluginConfiguration
 {
     public const int DefaultMaxEntries = 500;
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
 
     [NonSerialized]
     private IDalamudPluginInterface? pluginInterface;

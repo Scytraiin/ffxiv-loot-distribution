@@ -71,8 +71,63 @@ public sealed class MainWindow : Window, IDisposable
             return;
         }
 
-        var columnCount = this.lootCaptureService.DebugModeEnabled ? 8 : 7;
-        if (!ImGui.BeginTable("##loot-history", columnCount, ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(-1, -1)))
+        if (!ImGui.BeginTabBar("##loot-history-tabs"))
+        {
+            return;
+        }
+
+        if (ImGui.BeginTabItem("Loot History"))
+        {
+            DrawLootHistoryTable(visibleRecords, this.lootCaptureService.DebugModeEnabled);
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("Item Details"))
+        {
+            DrawItemDetailsTable(visibleRecords, this.lootCaptureService.DebugModeEnabled);
+            ImGui.EndTabItem();
+        }
+
+        ImGui.EndTabBar();
+    }
+
+    private static bool RecordMatchesFilter(LootRecord record, string filter)
+    {
+        return Contains(record.ZoneName, filter)
+            || Contains(record.WhoName, filter)
+            || Contains(record.LootText, filter)
+            || Contains(record.ItemCategoryLabel, filter)
+            || Contains(record.FilterGroupLabel, filter)
+            || Contains(record.EquipSlotCategoryLabel, filter)
+            || Contains(record.ResolvedItemName, filter)
+            || Contains(record.RollsText, filter)
+            || Contains(FormatOptional(record.FilterGroupId), filter)
+            || Contains(FormatOptional(record.EquipSlotCategoryId), filter)
+            || Contains(FormatOptional(record.ItemUICategoryId), filter)
+            || Contains(FormatOptional(record.ItemSearchCategoryId), filter)
+            || Contains(FormatOptional(record.ItemSortCategoryId), filter)
+            || Contains(record.RawText, filter);
+    }
+
+    private static bool Contains(string? value, string filter)
+    {
+        return !string.IsNullOrWhiteSpace(value) && value.Contains(filter, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetGroupLabel(LootWhoConfidence confidence)
+    {
+        return confidence switch
+        {
+            LootWhoConfidence.Self => "Self",
+            LootWhoConfidence.PartyOrAllianceVerified => "Party/Alliance",
+            _ => "Other",
+        };
+    }
+
+    private static void DrawLootHistoryTable(System.Collections.Generic.IReadOnlyList<LootRecord> records, bool debugModeEnabled)
+    {
+        var columnCount = debugModeEnabled ? 8 : 7;
+        if (!ImGui.BeginTable("##loot-history", columnCount, ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.ScrollX, new Vector2(-1, -1)))
         {
             return;
         }
@@ -84,13 +139,14 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.TableSetupColumn("Loot", ImGuiTableColumnFlags.WidthStretch, 240f);
         ImGui.TableSetupColumn("Rolls", ImGuiTableColumnFlags.WidthStretch, 220f);
         ImGui.TableSetupColumn("Raw Line", ImGuiTableColumnFlags.WidthStretch, 320f);
-        if (this.lootCaptureService.DebugModeEnabled)
+        if (debugModeEnabled)
         {
             ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthFixed, 95f);
         }
+
         ImGui.TableHeadersRow();
 
-        foreach (var record in visibleRecords)
+        foreach (var record in records)
         {
             ImGui.TableNextRow();
 
@@ -113,9 +169,9 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.TextWrapped(record.RollsText);
 
             ImGui.TableSetColumnIndex(6);
-            ImGui.TextWrapped(ShouldShowRawLine(record, this.lootCaptureService.DebugModeEnabled) ? record.RawText : string.Empty);
+            ImGui.TextWrapped(record.RawText);
 
-            if (this.lootCaptureService.DebugModeEnabled)
+            if (debugModeEnabled)
             {
                 ImGui.TableSetColumnIndex(7);
                 ImGui.TextUnformatted(record.Source.ToString());
@@ -125,35 +181,100 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.EndTable();
     }
 
-    private static bool RecordMatchesFilter(LootRecord record, string filter)
+    private static void DrawItemDetailsTable(System.Collections.Generic.IReadOnlyList<LootRecord> records, bool debugModeEnabled)
     {
-        return Contains(record.ZoneName, filter)
-            || Contains(record.WhoName, filter)
-            || Contains(record.LootText, filter)
-            || Contains(record.RollsText, filter)
-            || Contains(record.RawText, filter);
-    }
-
-    private static bool Contains(string? value, string filter)
-    {
-        return !string.IsNullOrWhiteSpace(value) && value.Contains(filter, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string GetGroupLabel(LootWhoConfidence confidence)
-    {
-        return confidence switch
+        var columnCount = debugModeEnabled ? 14 : 13;
+        if (!ImGui.BeginTable("##loot-item-details", columnCount, ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.ScrollX, new Vector2(-1, -1)))
         {
-            LootWhoConfidence.Self => "Self",
-            LootWhoConfidence.PartyOrAllianceVerified => "Party/Alliance",
-            _ => "Other",
-        };
+            return;
+        }
+
+        ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthFixed, 150f);
+        ImGui.TableSetupColumn("Zone", ImGuiTableColumnFlags.WidthFixed, 180f);
+        ImGui.TableSetupColumn("Who", ImGuiTableColumnFlags.WidthFixed, 170f);
+        ImGui.TableSetupColumn("Group", ImGuiTableColumnFlags.WidthFixed, 120f);
+        ImGui.TableSetupColumn("Loot", ImGuiTableColumnFlags.WidthStretch, 220f);
+        ImGui.TableSetupColumn("Category", ImGuiTableColumnFlags.WidthFixed, 150f);
+        ImGui.TableSetupColumn("Filter Group", ImGuiTableColumnFlags.WidthFixed, 170f);
+        ImGui.TableSetupColumn("Equip Slot", ImGuiTableColumnFlags.WidthFixed, 170f);
+        ImGui.TableSetupColumn("UI Category", ImGuiTableColumnFlags.WidthFixed, 100f);
+        ImGui.TableSetupColumn("Search Category", ImGuiTableColumnFlags.WidthFixed, 120f);
+        ImGui.TableSetupColumn("Sort Category", ImGuiTableColumnFlags.WidthFixed, 100f);
+        ImGui.TableSetupColumn("Rolls", ImGuiTableColumnFlags.WidthStretch, 220f);
+        ImGui.TableSetupColumn("Raw Line", ImGuiTableColumnFlags.WidthStretch, 320f);
+        if (debugModeEnabled)
+        {
+            ImGui.TableSetupColumn("Source", ImGuiTableColumnFlags.WidthFixed, 95f);
+        }
+
+        ImGui.TableHeadersRow();
+
+        foreach (var record in records)
+        {
+            ImGui.TableNextRow();
+
+            ImGui.TableSetColumnIndex(0);
+            ImGui.TextUnformatted(record.CapturedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
+
+            ImGui.TableSetColumnIndex(1);
+            ImGui.TextWrapped(string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName);
+
+            ImGui.TableSetColumnIndex(2);
+            ImGui.TextWrapped(record.WhoName ?? "Unknown");
+
+            ImGui.TableSetColumnIndex(3);
+            ImGui.TextWrapped(GetGroupLabel(record.WhoConfidence));
+
+            ImGui.TableSetColumnIndex(4);
+            ImGui.TextWrapped(record.LootText ?? record.RawText);
+
+            ImGui.TableSetColumnIndex(5);
+            ImGui.TextWrapped(record.ItemCategoryLabel ?? "Unknown");
+
+            ImGui.TableSetColumnIndex(6);
+            ImGui.TextWrapped(FormatLabelWithId(record.FilterGroupLabel, record.FilterGroupId));
+
+            ImGui.TableSetColumnIndex(7);
+            ImGui.TextWrapped(FormatLabelWithId(record.EquipSlotCategoryLabel, record.EquipSlotCategoryId));
+
+            ImGui.TableSetColumnIndex(8);
+            ImGui.TextUnformatted(FormatOptional(record.ItemUICategoryId));
+
+            ImGui.TableSetColumnIndex(9);
+            ImGui.TextUnformatted(FormatOptional(record.ItemSearchCategoryId));
+
+            ImGui.TableSetColumnIndex(10);
+            ImGui.TextUnformatted(FormatOptional(record.ItemSortCategoryId));
+
+            ImGui.TableSetColumnIndex(11);
+            ImGui.TextWrapped(record.RollsText);
+
+            ImGui.TableSetColumnIndex(12);
+            ImGui.TextWrapped(record.RawText);
+
+            if (debugModeEnabled)
+            {
+                ImGui.TableSetColumnIndex(13);
+                ImGui.TextUnformatted(record.Source.ToString());
+            }
+        }
+
+        ImGui.EndTable();
     }
 
-    private static bool ShouldShowRawLine(LootRecord record, bool debugModeEnabled)
+    private static string FormatLabelWithId(string? label, object? id)
     {
-        return debugModeEnabled
-            || string.IsNullOrWhiteSpace(record.WhoName)
-            || string.IsNullOrWhiteSpace(record.LootText)
-            || record.WhoConfidence == LootWhoConfidence.TextOnly;
+        var formattedId = FormatOptional(id);
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return formattedId;
+        }
+
+        return formattedId.Length == 0 ? label : $"{label} ({formattedId})";
+    }
+
+    private static string FormatOptional(object? value)
+    {
+        return value?.ToString() ?? string.Empty;
     }
 }

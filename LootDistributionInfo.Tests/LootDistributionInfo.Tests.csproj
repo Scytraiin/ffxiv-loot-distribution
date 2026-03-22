@@ -16,6 +16,7 @@
   <ItemGroup>
     <Compile Include="..\LootDistributionInfo\LootCaptureSource.cs" Link="Plugin\LootCaptureSource.cs" />
     <Compile Include="..\LootDistributionInfo\LootHistory.cs" Link="Plugin\LootHistory.cs" />
+    <Compile Include="..\LootDistributionInfo\ItemCategoryMappings.cs" Link="Plugin\ItemCategoryMappings.cs" />
     <Compile Include="..\LootDistributionInfo\LootMatcher.cs" Link="Plugin\LootMatcher.cs" />
     <Compile Include="..\LootDistributionInfo\LootParseResult.cs" Link="Plugin\LootParseResult.cs" />
     <Compile Include="..\LootDistributionInfo\LootRollMatcher.cs" Link="Plugin\LootRollMatcher.cs" />

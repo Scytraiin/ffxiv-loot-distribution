@@ -29,6 +29,26 @@ public sealed class LootRecord
 
     public string? LootText { get; set; }
 
+    public string? ItemCategoryLabel { get; set; }
+
+    public byte? FilterGroupId { get; set; }
+
+    public string? FilterGroupLabel { get; set; }
+
+    public uint? EquipSlotCategoryId { get; set; }
+
+    public string? EquipSlotCategoryLabel { get; set; }
+
+    public uint? ItemUICategoryId { get; set; }
+
+    public uint? ItemSearchCategoryId { get; set; }
+
+    public uint? ItemSortCategoryId { get; set; }
+
+    public string? ResolvedItemName { get; set; }
+
+    public string? ClassificationSource { get; set; }
+
     public string RollsText { get; set; } = NoRollsLabel;
 
     public List<LootRollRecord> RollEntries { get; set; } = [];
@@ -52,6 +72,11 @@ public sealed class LootRecord
         this.RawText = this.RawText?.Trim() ?? string.Empty;
         this.WhoName = NormalizeNullable(this.WhoName);
         this.LootText = NormalizeNullable(this.LootText);
+        this.ItemCategoryLabel = NormalizeNullable(this.ItemCategoryLabel);
+        this.FilterGroupLabel = NormalizeNullable(this.FilterGroupLabel);
+        this.EquipSlotCategoryLabel = NormalizeNullable(this.EquipSlotCategoryLabel);
+        this.ResolvedItemName = NormalizeNullable(this.ResolvedItemName);
+        this.ClassificationSource = NormalizeNullable(this.ClassificationSource);
         this.RollEntries ??= [];
 
         if (this.WhoName is null && !string.IsNullOrWhiteSpace(this.PlayerName))
