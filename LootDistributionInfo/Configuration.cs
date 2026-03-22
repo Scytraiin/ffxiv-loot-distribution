@@ -10,15 +10,18 @@ namespace LootDistributionInfo;
 public sealed class Configuration : IPluginConfiguration
 {
     public const int DefaultMaxEntries = 500;
+    public const int CurrentVersion = 2;
 
     [NonSerialized]
     private IDalamudPluginInterface? pluginInterface;
 
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = CurrentVersion;
 
     public bool RetainHistoryBetweenSessions { get; set; } = true;
 
     public int MaxEntries { get; set; } = DefaultMaxEntries;
+
+    public bool DebugModeEnabled { get; set; }
 
     public List<LootRecord> StoredRecords { get; set; } = [];
 
@@ -35,8 +38,14 @@ public sealed class Configuration : IPluginConfiguration
 
     public void Normalize()
     {
+        this.Version = CurrentVersion;
         this.MaxEntries = Math.Clamp(this.MaxEntries, 1, 5000);
         this.StoredRecords ??= [];
+
+        foreach (var record in this.StoredRecords)
+        {
+            record.Normalize();
+        }
 
         if (this.StoredRecords.Count > this.MaxEntries)
         {

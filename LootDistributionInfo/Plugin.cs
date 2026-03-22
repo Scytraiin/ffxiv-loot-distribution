@@ -18,6 +18,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly WindowSystem windowSystem = new("LootDistributionInfo");
     private readonly MainWindow mainWindow;
     private readonly ConfigWindow configWindow;
+    private readonly DebugWindow debugWindow;
     private readonly Configuration configuration;
     private readonly LootCaptureService lootCaptureService;
 
@@ -25,6 +26,10 @@ public sealed class Plugin : IDalamudPlugin
         IDalamudPluginInterface pluginInterface,
         ICommandManager commandManager,
         IChatGui chatGui,
+        IClientState clientState,
+        IDataManager dataManager,
+        IPlayerState playerState,
+        IPartyList partyList,
         IPluginLog log)
     {
         this.pluginInterface = pluginInterface;
@@ -32,22 +37,29 @@ public sealed class Plugin : IDalamudPlugin
 
         this.configuration = this.pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         this.configuration.Initialize(this.pluginInterface);
-        this.lootCaptureService = new LootCaptureService(this.configuration, chatGui, log);
+        this.lootCaptureService = new LootCaptureService(this.configuration, chatGui, clientState, dataManager, playerState, partyList, log);
 
-        this.mainWindow = new MainWindow(this.lootCaptureService, this.OpenConfigUi);
-        this.configWindow = new ConfigWindow(this.configuration, this.lootCaptureService);
+        this.mainWindow = new MainWindow(this.lootCaptureService, this.OpenConfigUi, this.OpenDebugUi);
+        this.configWindow = new ConfigWindow(this.configuration, this.lootCaptureService, this.OpenDebugUi);
+        this.debugWindow = new DebugWindow(this.lootCaptureService);
 
         this.windowSystem.AddWindow(this.mainWindow);
         this.windowSystem.AddWindow(this.configWindow);
+        this.windowSystem.AddWindow(this.debugWindow);
 
         this.commandManager.AddHandler(CommandName, new CommandInfo(this.OnCommand)
         {
-            HelpMessage = "Open the Loot Distribution Info window.",
+            HelpMessage = "Open the loot history window.",
         });
 
         this.pluginInterface.UiBuilder.Draw += this.DrawUi;
         this.pluginInterface.UiBuilder.OpenMainUi += this.OpenMainUi;
         this.pluginInterface.UiBuilder.OpenConfigUi += this.OpenConfigUi;
+
+        if (this.configuration.DebugModeEnabled)
+        {
+            this.OpenDebugUi();
+        }
 
         log.Information("Loot Distribution Info initialized.");
     }
@@ -65,6 +77,7 @@ public sealed class Plugin : IDalamudPlugin
         this.lootCaptureService.Dispose();
         this.mainWindow.Dispose();
         this.configWindow.Dispose();
+        this.debugWindow.Dispose();
     }
 
     private void OnCommand(string command, string args)
@@ -91,5 +104,13 @@ public sealed class Plugin : IDalamudPlugin
     private void OpenConfigUi()
     {
         this.configWindow.IsOpen = true;
+    }
+
+    private void OpenDebugUi()
+    {
+        if (this.configuration.DebugModeEnabled)
+        {
+            this.debugWindow.IsOpen = true;
+        }
     }
 }

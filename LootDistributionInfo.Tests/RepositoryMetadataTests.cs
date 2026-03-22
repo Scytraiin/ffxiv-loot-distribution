@@ -29,6 +29,7 @@ public sealed class RepositoryMetadataTests
         Assert.Equal(manifest.GetProperty("Author").GetString(), repoEntry.GetProperty("Author").GetString());
         Assert.Equal(manifest.GetProperty("InternalName").GetString(), repoEntry.GetProperty("InternalName").GetString());
         Assert.Equal(manifest.GetProperty("RepoUrl").GetString(), repoEntry.GetProperty("RepoUrl").GetString());
+        Assert.Equal(manifest.GetProperty("IconUrl").GetString(), repoEntry.GetProperty("IconUrl").GetString());
     }
 
     private static JsonDocument LoadJsonDocument(string fileName)

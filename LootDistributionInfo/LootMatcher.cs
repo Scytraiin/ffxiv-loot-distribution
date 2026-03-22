@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace LootDistributionInfo;
@@ -13,6 +15,14 @@ public static class LootMatcher
     ];
 
     public static LootRecord? TryMatch(string rawText, LootCaptureSource source, DateTimeOffset capturedAtUtc)
+        => TryMatch(rawText, source, capturedAtUtc, null, null);
+
+    public static LootRecord? TryMatch(
+        string rawText,
+        LootCaptureSource source,
+        DateTimeOffset capturedAtUtc,
+        string? localPlayerName,
+        IEnumerable<string>? knownMemberNames)
     {
         var trimmedText = rawText.Trim();
         if (trimmedText.Length == 0)
@@ -25,14 +35,15 @@ public static class LootMatcher
             return null;
         }
 
-        var (playerName, itemText) = SplitBestEffort(trimmedText);
+        var (whoName, confidence, lootText) = SplitBestEffort(trimmedText, localPlayerName, knownMemberNames);
 
         return new LootRecord
         {
             CapturedAtUtc = capturedAtUtc,
             RawText = trimmedText,
-            PlayerName = playerName,
-            ItemText = itemText,
+            WhoName = whoName,
+            WhoConfidence = confidence,
+            LootText = lootText,
             Source = source,
         };
     }
@@ -88,12 +99,18 @@ public static class LootMatcher
         return builder.ToString();
     }
 
-    private static (string? PlayerName, string? ItemText) SplitBestEffort(string rawText)
+    private static (string? WhoName, LootWhoConfidence Confidence, string? LootText) SplitBestEffort(
+        string rawText,
+        string? localPlayerName,
+        IEnumerable<string>? knownMemberNames)
     {
-        // Best-effort splitting is enough for the first version; the raw line remains the source
-        // of truth in the UI even when player/item extraction is incomplete.
         var paddedText = $" {rawText} ";
         var loweredText = paddedText.ToLowerInvariant();
+        var normalizedKnownNames = knownMemberNames?
+            .Select(NormalizeForNameMatch)
+            .Where(name => name.Length > 0)
+            .ToHashSet(StringComparer.Ordinal)
+            ?? [];
 
         foreach (var marker in VerbNeedles)
         {
@@ -109,14 +126,40 @@ public static class LootMatcher
             itemText = itemText.TrimEnd('.', '!', '?');
             itemText = StripLeadingArticle(itemText);
 
+            if (string.Equals(playerName, "You", StringComparison.OrdinalIgnoreCase))
+            {
+                return
+                (
+                    string.IsNullOrWhiteSpace(localPlayerName) ? "You" : localPlayerName.Trim(),
+                    LootWhoConfidence.Self,
+                    itemText.Length == 0 ? null : itemText
+                );
+            }
+
+            if (LooksLikeTwoWordName(playerName))
+            {
+                var normalizedCandidate = NormalizeForNameMatch(playerName);
+                var confidence = normalizedKnownNames.Contains(normalizedCandidate)
+                    ? LootWhoConfidence.PartyOrAllianceVerified
+                    : LootWhoConfidence.TextOnly;
+
+                return
+                (
+                    playerName,
+                    confidence,
+                    itemText.Length == 0 ? null : itemText
+                );
+            }
+
             return
             (
-                playerName.Length == 0 ? null : playerName,
+                null,
+                LootWhoConfidence.Unknown,
                 itemText.Length == 0 ? null : itemText
             );
         }
 
-        return (null, null);
+        return (null, LootWhoConfidence.Unknown, null);
     }
 
     private static string StripLeadingArticle(string itemText)
@@ -130,5 +173,44 @@ public static class LootMatcher
         }
 
         return itemText;
+    }
+
+    private static bool LooksLikeTwoWordName(string candidate)
+    {
+        var parts = candidate.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 2 && parts.All(IsLikelyNamePart);
+    }
+
+    private static bool IsLikelyNamePart(string part)
+    {
+        if (part.Length < 2)
+        {
+            return false;
+        }
+
+        if (!char.IsUpper(part[0]))
+        {
+            return false;
+        }
+
+        foreach (var character in part)
+        {
+            if (char.IsLetter(character) || character is '\'' or '-')
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private static string NormalizeForNameMatch(string value)
+    {
+        return string.Join(
+            ' ',
+            value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(part => part.ToLowerInvariant()));
     }
 }

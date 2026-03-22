@@ -1,9 +1,10 @@
 {
   "Author": "scyt.raiin",
   "Name": "Loot Distribution Info",
-  "Punchline": "Shows a starter window for loot distribution details.",
-  "Description": "Minimal Dalamud plugin skeleton for presenting loot distribution information in Final Fantasy XIV.",
+  "Punchline": "Track who received loot and where it happened.",
+  "Description": "Keeps a searchable history of loot messages, including the zone and recipient.",
   "RepoUrl": "https://github.com/Scytraiin/ffxiv-loot-distribution",
+  "IconUrl": "https://raw.githubusercontent.com/Scytraiin/ffxiv-loot-distribution/main/assets/branding/Loot_History_v1.png",
   "InternalName": "LootDistributionInfo",
   "ApplicableVersion": "any",
   "Tags": [
