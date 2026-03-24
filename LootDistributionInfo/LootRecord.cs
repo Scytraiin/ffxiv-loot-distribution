@@ -27,7 +27,15 @@ public sealed class LootRecord
 
     public string? WhoName { get; set; }
 
+    public string? WhoDisplayName { get; set; }
+
+    public string? WhoWorldName { get; set; }
+
+    public ushort? WhoHomeWorldId { get; set; }
+
     public string? LootText { get; set; }
+
+    public LootTypeBucket LootTypeBucket { get; set; }
 
     public uint? ItemId { get; set; }
 
@@ -79,6 +87,8 @@ public sealed class LootRecord
         this.ZoneName = this.ZoneName?.Trim() ?? string.Empty;
         this.RawText = this.RawText?.Trim() ?? string.Empty;
         this.WhoName = NormalizeNullable(this.WhoName);
+        this.WhoDisplayName = NormalizeNullable(this.WhoDisplayName) ?? this.WhoName;
+        this.WhoWorldName = NormalizeNullable(this.WhoWorldName);
         this.LootText = NormalizeNullable(this.LootText);
         this.ItemCategoryLabel = NormalizeNullable(this.ItemCategoryLabel);
         this.FilterGroupLabel = NormalizeNullable(this.FilterGroupLabel);
@@ -90,6 +100,7 @@ public sealed class LootRecord
         if (this.WhoName is null && !string.IsNullOrWhiteSpace(this.PlayerName))
         {
             this.WhoName = NormalizeNullable(this.PlayerName);
+            this.WhoDisplayName ??= this.WhoName;
         }
 
         if (this.LootText is null && !string.IsNullOrWhiteSpace(this.ItemText))

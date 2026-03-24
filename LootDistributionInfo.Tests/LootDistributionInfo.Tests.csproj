@@ -20,10 +20,13 @@
     <Compile Include="..\LootDistributionInfo\LootOverviewSummary.cs" Link="Plugin\LootOverviewSummary.cs" />
     <Compile Include="..\LootDistributionInfo\LootMatcher.cs" Link="Plugin\LootMatcher.cs" />
     <Compile Include="..\LootDistributionInfo\LootParseResult.cs" Link="Plugin\LootParseResult.cs" />
+    <Compile Include="..\LootDistributionInfo\LootRecipientResolver.cs" Link="Plugin\LootRecipientResolver.cs" />
     <Compile Include="..\LootDistributionInfo\LootRollMatcher.cs" Link="Plugin\LootRollMatcher.cs" />
     <Compile Include="..\LootDistributionInfo\LootRollRecord.cs" Link="Plugin\LootRollRecord.cs" />
     <Compile Include="..\LootDistributionInfo\LootRollType.cs" Link="Plugin\LootRollType.cs" />
     <Compile Include="..\LootDistributionInfo\LootRecord.cs" Link="Plugin\LootRecord.cs" />
+    <Compile Include="..\LootDistributionInfo\LootTypeBucket.cs" Link="Plugin\LootTypeBucket.cs" />
+    <Compile Include="..\LootDistributionInfo\LootTypeClassifier.cs" Link="Plugin\LootTypeClassifier.cs" />
     <Compile Include="..\LootDistributionInfo\PendingRollSession.cs" Link="Plugin\PendingRollSession.cs" />
     <Compile Include="..\LootDistributionInfo\PendingRollTracker.cs" Link="Plugin\PendingRollTracker.cs" />
   </ItemGroup>

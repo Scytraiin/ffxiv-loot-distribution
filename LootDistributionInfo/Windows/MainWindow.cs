@@ -13,6 +13,7 @@ namespace LootDistributionInfo.Windows;
 public sealed class MainWindow : Window, IDisposable
 {
     private static readonly string[] GroupFilters = ["All groups", "Self", "Party/Alliance", "Other"];
+    private static readonly string[] LootTypeFilters = ["All loot", "Dungeon loot", "Raid loot"];
 
     private readonly LootCaptureService lootCaptureService;
     private readonly Configuration configuration;
@@ -20,6 +21,7 @@ public sealed class MainWindow : Window, IDisposable
     private readonly Action openConfigUi;
     private readonly Action openDebugUi;
     private string filterText = string.Empty;
+    private int selectedLootTypeFilter;
     private int selectedGroupFilter;
     private string selectedCategoryFilter = string.Empty;
     private string selectedZoneFilter = string.Empty;
@@ -135,6 +137,9 @@ public sealed class MainWindow : Window, IDisposable
         this.DrawCombo("##group-filter", GroupFilters, ref this.selectedGroupFilter, 120f);
 
         ImGui.SameLine();
+        this.DrawCombo("##loot-type-filter", LootTypeFilters, ref this.selectedLootTypeFilter, 125f);
+
+        ImGui.SameLine();
         this.DrawStringFilterCombo("##category-filter", "All categories", categoryFilters, ref this.selectedCategoryFilter, 150f);
 
         ImGui.SameLine();
@@ -194,13 +199,13 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.TextUnformatted(record.CapturedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
 
             ImGui.TableSetColumnIndex(1);
-            this.DrawTruncatedCellText(string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName);
+            this.DrawRecordTextCell(record, GetDisplayOrUnknown(record.ZoneName), "history-zone");
 
             ImGui.TableSetColumnIndex(2);
-            this.DrawTruncatedCellText(record.WhoName ?? "Unknown");
+            this.DrawRecordTextCell(record, GetWhoLabel(record), "history-who", GetGroupColor(record.WhoConfidence));
 
             ImGui.TableSetColumnIndex(3);
-            this.DrawTruncatedCellText(GetGroupLabel(record.WhoConfidence));
+            this.DrawRecordTextCell(record, GetGroupLabel(record.WhoConfidence), "history-group", GetGroupColor(record.WhoConfidence));
 
             ImGui.TableSetColumnIndex(4);
             this.DrawIconCell(record, "history");
@@ -209,10 +214,10 @@ public sealed class MainWindow : Window, IDisposable
             this.DrawLootCell(record, "history");
 
             ImGui.TableSetColumnIndex(6);
-            this.DrawTruncatedCellText(record.RollsText);
+            this.DrawRecordTextCell(record, record.RollsText, "history-rolls");
 
             ImGui.TableSetColumnIndex(7);
-            this.DrawTruncatedCellText(record.RawText);
+            this.DrawRecordTextCell(record, record.RawText, "history-raw");
 
             ImGui.TableSetColumnIndex(8);
             this.DrawCopyButton(record, "history");
@@ -265,13 +270,13 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.TextUnformatted(record.CapturedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
 
             ImGui.TableSetColumnIndex(1);
-            this.DrawTruncatedCellText(string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName);
+            this.DrawRecordTextCell(record, GetDisplayOrUnknown(record.ZoneName), "details-zone");
 
             ImGui.TableSetColumnIndex(2);
-            this.DrawTruncatedCellText(record.WhoName ?? "Unknown");
+            this.DrawRecordTextCell(record, GetWhoLabel(record), "details-who", GetGroupColor(record.WhoConfidence));
 
             ImGui.TableSetColumnIndex(3);
-            this.DrawTruncatedCellText(GetGroupLabel(record.WhoConfidence));
+            this.DrawRecordTextCell(record, GetGroupLabel(record.WhoConfidence), "details-group", GetGroupColor(record.WhoConfidence));
 
             ImGui.TableSetColumnIndex(4);
             this.DrawIconCell(record, "details");
@@ -280,28 +285,28 @@ public sealed class MainWindow : Window, IDisposable
             this.DrawLootCell(record, "details");
 
             ImGui.TableSetColumnIndex(6);
-            this.DrawTruncatedCellText(record.ItemCategoryLabel ?? "Unknown");
+            this.DrawRecordTextCell(record, record.ItemCategoryLabel ?? "Unknown", "details-category");
 
             ImGui.TableSetColumnIndex(7);
-            this.DrawTruncatedCellText(FormatLabelWithId(record.FilterGroupLabel, record.FilterGroupId));
+            this.DrawRecordTextCell(record, FormatLabelWithId(record.FilterGroupLabel, record.FilterGroupId), "details-filter-group");
 
             ImGui.TableSetColumnIndex(8);
-            this.DrawTruncatedCellText(FormatLabelWithId(record.EquipSlotCategoryLabel, record.EquipSlotCategoryId));
+            this.DrawRecordTextCell(record, FormatLabelWithId(record.EquipSlotCategoryLabel, record.EquipSlotCategoryId), "details-equip-slot");
 
             ImGui.TableSetColumnIndex(9);
-            this.DrawTruncatedCellText(FormatOptional(record.ItemUICategoryId));
+            this.DrawRecordTextCell(record, FormatOptional(record.ItemUICategoryId), "details-ui-category");
 
             ImGui.TableSetColumnIndex(10);
-            this.DrawTruncatedCellText(FormatOptional(record.ItemSearchCategoryId));
+            this.DrawRecordTextCell(record, FormatOptional(record.ItemSearchCategoryId), "details-search-category");
 
             ImGui.TableSetColumnIndex(11);
-            this.DrawTruncatedCellText(FormatOptional(record.ItemSortCategoryId));
+            this.DrawRecordTextCell(record, FormatOptional(record.ItemSortCategoryId), "details-sort-category");
 
             ImGui.TableSetColumnIndex(12);
-            this.DrawTruncatedCellText(record.RollsText);
+            this.DrawRecordTextCell(record, record.RollsText, "details-rolls");
 
             ImGui.TableSetColumnIndex(13);
-            this.DrawTruncatedCellText(record.RawText);
+            this.DrawRecordTextCell(record, record.RawText, "details-raw");
 
             ImGui.TableSetColumnIndex(14);
             this.DrawCopyButton(record, "details");
@@ -323,27 +328,21 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.TextUnformatted("Overview reflects the current filters.");
         ImGui.Spacing();
 
-        if (ImGui.BeginTable("##overview-summary", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
+        if (ImGui.BeginTable("##overview-summary-cards", 4, ImGuiTableFlags.SizingStretchSame))
         {
-            ImGui.TableSetupColumn("Total");
-            ImGui.TableSetupColumn("Unique");
-            ImGui.TableSetupColumn("Latest");
-            ImGui.TableSetupColumn("Visible Categories");
-            ImGui.TableHeadersRow();
-
             ImGui.TableNextRow();
 
             ImGui.TableSetColumnIndex(0);
-            ImGui.TextUnformatted(summary.TotalEntries.ToString());
+            this.DrawOverviewCard("Entries", summary.TotalEntries.ToString(), GetLootTypeFilterDescription());
 
             ImGui.TableSetColumnIndex(1);
-            ImGui.TextUnformatted(summary.UniqueItems.ToString());
+            this.DrawOverviewCard("Unique Items", summary.UniqueItems.ToString(), "Distinct visible items");
 
             ImGui.TableSetColumnIndex(2);
-            ImGui.TextUnformatted(summary.LatestItemAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "-");
+            this.DrawOverviewCard("Latest Loot", summary.LatestItemAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "-", "Most recent visible entry");
 
             ImGui.TableSetColumnIndex(3);
-            ImGui.TextUnformatted(summary.TopCategories.Count.ToString());
+            this.DrawOverviewCard("Categories", summary.TopCategories.Count.ToString(), "Visible category buckets");
 
             ImGui.EndTable();
         }
@@ -414,6 +413,11 @@ public sealed class MainWindow : Window, IDisposable
             return false;
         }
 
+        if (this.selectedLootTypeFilter != 0 && record.LootTypeBucket != GetSelectedLootTypeBucket(this.selectedLootTypeFilter))
+        {
+            return false;
+        }
+
         if (this.selectedGroupFilter != 0 && GetGroupLabel(record.WhoConfidence) != GroupFilters[this.selectedGroupFilter])
         {
             return false;
@@ -469,6 +473,28 @@ public sealed class MainWindow : Window, IDisposable
         this.DrawTooltipAndContext(record, $"{scope}-loot", truncated);
     }
 
+    private void DrawRecordTextCell(LootRecord record, string text, string scope, Vector4? color = null)
+    {
+        var displayText = GetTruncatedDisplayText(text, this.GetAvailableCellTextWidth(), out var truncated);
+        if (color is Vector4 textColor)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, textColor);
+            ImGui.TextUnformatted(displayText);
+            ImGui.PopStyleColor();
+        }
+        else
+        {
+            ImGui.TextUnformatted(displayText);
+        }
+
+        if (truncated && ImGui.IsItemHovered())
+        {
+            this.DrawTextTooltip(text);
+        }
+
+        this.DrawContextMenu(record, scope);
+    }
+
     private bool DrawColoredItemText(LootRecord record, string label)
     {
         var displayText = GetTruncatedDisplayText(label, this.GetAvailableCellTextWidth(), out var truncated);
@@ -506,6 +532,11 @@ public sealed class MainWindow : Window, IDisposable
             }
         }
 
+        this.DrawContextMenu(record, scope);
+    }
+
+    private void DrawContextMenu(LootRecord record, string scope)
+    {
         if (ImGui.BeginPopupContextItem($"##record-context-{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{record.RawText.GetHashCode()}"))
         {
             if (ImGui.MenuItem("Copy line"))
@@ -550,7 +581,9 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.Separator();
         ImGui.TextUnformatted($"When: {record.CapturedAtUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}");
         ImGui.TextUnformatted($"Zone: {GetDisplayOrUnknown(record.ZoneName)}");
+        ImGui.TextUnformatted($"Who: {GetWhoLabel(record)}");
         ImGui.TextUnformatted($"Group: {GetGroupLabel(record.WhoConfidence)}");
+        ImGui.TextUnformatted($"Loot type: {GetLootTypeLabel(record.LootTypeBucket)}");
         ImGui.TextUnformatted($"Category: {record.ItemCategoryLabel ?? "Unknown"}");
         ImGui.TextUnformatted($"Filter Group: {FormatLabelWithId(record.FilterGroupLabel, record.FilterGroupId)}");
         ImGui.TextUnformatted($"Equip Slot: {FormatLabelWithId(record.EquipSlotCategoryLabel, record.EquipSlotCategoryId)}");
@@ -665,7 +698,10 @@ public sealed class MainWindow : Window, IDisposable
     {
         return Contains(record.ZoneName, filter)
             || Contains(record.WhoName, filter)
+            || Contains(record.WhoDisplayName, filter)
+            || Contains(record.WhoWorldName, filter)
             || Contains(record.LootText, filter)
+            || Contains(GetLootTypeLabel(record.LootTypeBucket), filter)
             || Contains(record.ItemCategoryLabel, filter)
             || Contains(record.FilterGroupLabel, filter)
             || Contains(record.EquipSlotCategoryLabel, filter)
@@ -695,6 +731,31 @@ public sealed class MainWindow : Window, IDisposable
         };
     }
 
+    private static string GetWhoLabel(LootRecord record)
+    {
+        return record.WhoDisplayName ?? record.WhoName ?? "Unknown";
+    }
+
+    private static string GetLootTypeLabel(LootTypeBucket bucket)
+    {
+        return bucket switch
+        {
+            LootTypeBucket.Dungeon => "Dungeon",
+            LootTypeBucket.Raid => "Raid",
+            _ => "Other",
+        };
+    }
+
+    private static LootTypeBucket GetSelectedLootTypeBucket(int selectedIndex)
+    {
+        return selectedIndex switch
+        {
+            1 => LootTypeBucket.Dungeon,
+            2 => LootTypeBucket.Raid,
+            _ => LootTypeBucket.Other,
+        };
+    }
+
     private static string FormatLabelWithId(string? label, object? id)
     {
         var formattedId = FormatOptional(id);
@@ -713,7 +774,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private string BuildClipboardLine(LootRecord record)
     {
-        var who = record.WhoName ?? "Unknown";
+        var who = GetWhoLabel(record);
         var loot = record.ResolvedItemName ?? record.LootText ?? record.RawText;
         if (record.IsHighQuality)
         {
@@ -726,6 +787,26 @@ public sealed class MainWindow : Window, IDisposable
     private static string FormatOptional(object? value)
     {
         return value?.ToString() ?? string.Empty;
+    }
+
+    private void DrawOverviewCard(string title, string value, string subtitle)
+    {
+        ImGui.BeginChild($"##overview-card-{title}", new Vector2(0, 78), true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        ImGui.TextColored(new Vector4(0.40f, 0.80f, 1.00f, 1.0f), title);
+        ImGui.Spacing();
+        ImGui.TextUnformatted(value);
+        ImGui.TextDisabled(subtitle);
+        ImGui.EndChild();
+    }
+
+    private string GetLootTypeFilterDescription()
+    {
+        return this.selectedLootTypeFilter switch
+        {
+            1 => "Dungeon loot only",
+            2 => "Raid loot only",
+            _ => "All visible loot",
+        };
     }
 
     private float GetAvailableCellTextWidth()
@@ -794,6 +875,16 @@ public sealed class MainWindow : Window, IDisposable
             4 => new Vector4(0.8f, 0.4f, 1.0f, 1.0f),
             7 => new Vector4(1.0f, 0.6f, 0.8f, 1.0f),
             _ => new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
+        };
+    }
+
+    private static Vector4 GetGroupColor(LootWhoConfidence confidence)
+    {
+        return confidence switch
+        {
+            LootWhoConfidence.Self => new Vector4(0.45f, 0.95f, 0.45f, 1.0f),
+            LootWhoConfidence.PartyOrAllianceVerified => new Vector4(0.45f, 0.75f, 1.0f, 1.0f),
+            _ => new Vector4(0.90f, 0.90f, 0.90f, 1.0f),
         };
     }
 }

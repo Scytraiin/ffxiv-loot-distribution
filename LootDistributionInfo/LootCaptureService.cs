@@ -29,6 +29,7 @@ public sealed class LootCaptureService : IDisposable
     private readonly PendingRollTracker pendingRollTracker;
     private readonly ItemClassificationService itemClassificationService;
     private string currentZoneName;
+    private LootTypeBucket currentLootTypeBucket;
 
     public LootCaptureService(
         Configuration configuration,
@@ -50,6 +51,7 @@ public sealed class LootCaptureService : IDisposable
         this.pendingRollTracker = new PendingRollTracker();
         this.itemClassificationService = new ItemClassificationService(this.dataManager);
         this.currentZoneName = this.ResolveZoneName(this.clientState.TerritoryType);
+        this.currentLootTypeBucket = this.ResolveLootTypeBucket(this.clientState.TerritoryType);
         this.history.Trim(this.configuration.MaxEntries);
 
         // The plugin listens to both user-visible chat and raw log messages because some loot lines
@@ -114,19 +116,17 @@ public sealed class LootCaptureService : IDisposable
             return;
         }
 
-        this.ProcessIncomingText(flattenedMessage, LootCaptureSource.ChatMessage, message);
+        this.ProcessIncomingText(flattenedMessage, LootCaptureSource.ChatMessage, message: message);
     }
 
     private void OnLogMessage(ILogMessage message)
     {
-        // v1 intentionally keeps the log path simple and matches the formatted line with the same
-        // broad wildcard-style filter used for visible chat text.
         ReadOnlySeString formattedMessage = message.FormatLogMessageForDebugging();
         this.Debug("Log", $"Received log message: {formattedMessage.ExtractText()}");
-        this.ProcessIncomingText(formattedMessage.ExtractText(), LootCaptureSource.LogMessage);
+        this.ProcessIncomingText(formattedMessage.ExtractText(), LootCaptureSource.LogMessage, logMessage: message);
     }
 
-    private void ProcessIncomingText(string rawText, LootCaptureSource source, SeString? message = null)
+    private void ProcessIncomingText(string rawText, LootCaptureSource source, SeString? message = null, ILogMessage? logMessage = null)
     {
         this.ExpirePendingRollSessions(DateTimeOffset.UtcNow);
 
@@ -135,7 +135,7 @@ public sealed class LootCaptureService : IDisposable
             return;
         }
 
-        this.TryCaptureLoot(rawText, source, message);
+        this.TryCaptureLoot(rawText, source, message, logMessage);
     }
 
     private bool TryCaptureRoll(string rawText, LootCaptureSource source)
@@ -172,7 +172,7 @@ public sealed class LootCaptureService : IDisposable
         return true;
     }
 
-    private void TryCaptureLoot(string rawText, LootCaptureSource source, SeString? message)
+    private void TryCaptureLoot(string rawText, LootCaptureSource source, SeString? message, ILogMessage? logMessage)
     {
         var parsedLoot = LootMatcher.TryMatch(rawText);
         if (parsedLoot is null)
@@ -181,8 +181,8 @@ public sealed class LootCaptureService : IDisposable
             return;
         }
 
-        var matchedRecord = this.BuildRecord(parsedLoot, source, message);
-        this.Debug("Matcher", $"Matched {source}: who={matchedRecord.WhoName ?? "<unknown>"} ({matchedRecord.WhoConfidence}), loot={matchedRecord.LootText ?? "<unknown>"}.");
+        var matchedRecord = this.BuildRecord(parsedLoot, source, message, logMessage);
+        this.Debug("Matcher", $"Matched {source}: who={matchedRecord.WhoDisplayName ?? matchedRecord.WhoName ?? "<unknown>"} ({matchedRecord.WhoConfidence}), loot={matchedRecord.LootText ?? "<unknown>"}, type={matchedRecord.LootTypeBucket}.");
 
         var matchedRollSession = this.pendingRollTracker.TryResolve(matchedRecord.LootText ?? matchedRecord.RawText, matchedRecord.ZoneName, matchedRecord.CapturedAtUtc, RollCorrelationWindow);
         if (matchedRollSession is not null)
@@ -219,7 +219,8 @@ public sealed class LootCaptureService : IDisposable
     private void OnTerritoryChanged(ushort territoryType)
     {
         this.currentZoneName = this.ResolveZoneName(territoryType);
-        this.Debug("Zone", $"Entered {this.currentZoneName} ({territoryType}).");
+        this.currentLootTypeBucket = this.ResolveLootTypeBucket(territoryType);
+        this.Debug("Zone", $"Entered {this.currentZoneName} ({territoryType}) [{this.currentLootTypeBucket}].");
     }
 
     private string ResolveZoneName(ushort territoryType)
@@ -245,18 +246,24 @@ public sealed class LootCaptureService : IDisposable
             : null;
     }
 
-    private HashSet<string> GetKnownPartyAndAllianceNames()
+    private ushort? GetLocalHomeWorldId()
     {
-        return this.partyList
-            .Select(member => member.Name.TextValue)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(LootMatcher.NormalizeForNameMatch)
-            .ToHashSet(StringComparer.Ordinal);
+        if (!this.playerState.IsLoaded)
+        {
+            return null;
+        }
+
+        return TryConvertWorldId(this.playerState.HomeWorld.RowId);
     }
 
-    private LootRecord BuildRecord(LootParseResult parsedLoot, LootCaptureSource source, SeString? message)
+    private LootRecord BuildRecord(LootParseResult parsedLoot, LootCaptureSource source, SeString? message, ILogMessage? logMessage)
     {
-        var (whoName, confidence) = this.ResolveWho(parsedLoot.SubjectText);
+        var resolvedRecipient = LootRecipientResolver.Resolve(
+            parsedLoot.SubjectText,
+            this.GetStructuredRecipientCandidates(message, logMessage),
+            this.GetPartyAndAllianceMembers(),
+            this.GetLocalPlayerName(),
+            this.GetLocalHomeWorldId());
         var itemPayload = this.TryExtractItemPayload(message);
         var itemClassification = this.itemClassificationService.Classify(parsedLoot.LootText, itemPayload?.ItemId);
 
@@ -265,8 +272,12 @@ public sealed class LootCaptureService : IDisposable
             CapturedAtUtc = DateTimeOffset.UtcNow,
             ZoneName = this.currentZoneName,
             RawText = parsedLoot.RawText,
-            WhoName = whoName,
+            WhoName = resolvedRecipient.WhoName,
+            WhoDisplayName = resolvedRecipient.WhoDisplayName,
+            WhoWorldName = resolvedRecipient.WhoWorldName,
+            WhoHomeWorldId = resolvedRecipient.WhoHomeWorldId,
             LootText = parsedLoot.LootText,
+            LootTypeBucket = this.currentLootTypeBucket,
             ItemId = itemClassification.ItemId ?? itemPayload?.ItemId,
             IconId = itemClassification.IconId,
             Rarity = itemClassification.Rarity,
@@ -281,7 +292,7 @@ public sealed class LootCaptureService : IDisposable
             ItemSortCategoryId = itemClassification.ItemSortCategoryId,
             ResolvedItemName = itemClassification.ResolvedItemName,
             ClassificationSource = itemClassification.ClassificationSource,
-            WhoConfidence = confidence,
+            WhoConfidence = resolvedRecipient.Confidence,
             Source = source,
         };
 
@@ -296,29 +307,73 @@ public sealed class LootCaptureService : IDisposable
             : playerName.Trim();
     }
 
-    private (string? WhoName, LootWhoConfidence Confidence) ResolveWho(string? subjectText)
+    private IReadOnlyList<LootPartyMemberIdentity> GetPartyAndAllianceMembers()
     {
-        if (string.IsNullOrWhiteSpace(subjectText))
+        return this.partyList
+            .Select(member =>
+            {
+                var baseName = member.Name.TextValue.Trim();
+                var worldId = TryConvertWorldId(member.World.RowId);
+                var worldName = NormalizeNullable(member.World.ValueNullable?.Name.ExtractText());
+                return string.IsNullOrWhiteSpace(baseName)
+                    ? null
+                    : new LootPartyMemberIdentity(baseName, baseName, worldId, worldName);
+            })
+            .Where(member => member is not null)
+            .Cast<LootPartyMemberIdentity>()
+            .ToList();
+    }
+
+    private IReadOnlyList<LootRecipientCandidate> GetStructuredRecipientCandidates(SeString? message, ILogMessage? logMessage)
+    {
+        var candidates = new List<LootRecipientCandidate>();
+
+        if (message is not null)
         {
-            return (null, LootWhoConfidence.Unknown);
+            foreach (var payload in message.Payloads.OfType<PlayerPayload>())
+            {
+                var baseName = payload.PlayerName?.Trim();
+                if (string.IsNullOrWhiteSpace(baseName))
+                {
+                    continue;
+                }
+
+                candidates.Add(new LootRecipientCandidate(
+                    baseName,
+                    TryConvertWorldId(payload.World.RowId),
+                    NormalizeNullable(payload.World.ValueNullable?.Name.ExtractText())));
+            }
         }
 
-        if (string.Equals(subjectText, "You", StringComparison.OrdinalIgnoreCase))
+        if (logMessage is not null)
         {
-            return (this.GetLocalPlayerName() ?? "You", LootWhoConfidence.Self);
+            this.AddLogEntityCandidate(candidates, logMessage.SourceEntity);
+            this.AddLogEntityCandidate(candidates, logMessage.TargetEntity);
         }
 
-        if (!LootMatcher.LooksLikeTwoWordName(subjectText))
+        return candidates
+            .GroupBy(candidate => $"{LootMatcher.NormalizeForNameMatch(candidate.BaseName)}|{candidate.HomeWorldId}")
+            .Select(group => group.First())
+            .ToList();
+    }
+
+    private void AddLogEntityCandidate(List<LootRecipientCandidate> candidates, ILogMessageEntity? entity)
+    {
+        if (entity is null || !entity.IsPlayer)
         {
-            return (null, LootWhoConfidence.Unknown);
+            return;
         }
 
-        var normalizedCandidate = LootMatcher.NormalizeForNameMatch(subjectText);
-        var confidence = this.GetKnownPartyAndAllianceNames().Contains(normalizedCandidate)
-            ? LootWhoConfidence.PartyOrAllianceVerified
-            : LootWhoConfidence.TextOnly;
+        var baseName = entity.Name.ExtractText().Trim();
+        if (string.IsNullOrWhiteSpace(baseName))
+        {
+            return;
+        }
 
-        return (subjectText, confidence);
+        candidates.Add(new LootRecipientCandidate(
+            baseName,
+            entity.HomeWorldId == 0 ? null : entity.HomeWorldId,
+            NormalizeNullable(entity.HomeWorld.ValueNullable?.Name.ExtractText())));
     }
 
     private void Debug(string eventName, string details)
@@ -335,6 +390,22 @@ public sealed class LootCaptureService : IDisposable
     {
         var flattened = SeStringDisplayText.Flatten(message);
         return string.IsNullOrWhiteSpace(flattened) ? message.TextValue.Trim() : flattened;
+    }
+
+    private LootTypeBucket ResolveLootTypeBucket(ushort territoryType)
+    {
+        if (territoryType == 0)
+        {
+            return LootTypeBucket.Other;
+        }
+
+        if (!this.dataManager.GetExcelSheet<TerritoryType>().TryGetRow(territoryType, out var territory))
+        {
+            return LootTypeBucket.Other;
+        }
+
+        var contentTypeId = territory.ContentFinderCondition.ValueNullable?.ContentType.RowId ?? 0;
+        return LootTypeClassifier.Classify(contentTypeId);
     }
 
     private ItemPayloadMatch? TryExtractItemPayload(SeString? message)
@@ -359,6 +430,22 @@ public sealed class LootCaptureService : IDisposable
     {
         return rawText.Contains(" HQ", StringComparison.OrdinalIgnoreCase)
             || (!string.IsNullOrWhiteSpace(lootText) && lootText.Contains(" HQ", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static ushort? TryConvertWorldId(uint rowId)
+    {
+        return rowId switch
+        {
+            0 => null,
+            > ushort.MaxValue => null,
+            _ => (ushort)rowId,
+        };
+    }
+
+    private static string? NormalizeNullable(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
     private void ExpirePendingRollSessions(DateTimeOffset now)
