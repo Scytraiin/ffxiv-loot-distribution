@@ -8,3 +8,4 @@
 - [v0.2.0-beta](./v0.2.0-beta.md)
 - [v0.2.1-alpha](./v0.2.1-alpha.md)
 - [v0.2.2-alpha](./v0.2.2-alpha.md)
+- [v1.0.0-alpha](./v1.0.0-alpha.md)
