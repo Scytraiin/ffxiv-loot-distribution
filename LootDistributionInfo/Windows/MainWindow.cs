@@ -54,21 +54,24 @@ public sealed class MainWindow : Window, IDisposable
         LootRecipientFilter.Other,
     ];
 
-    private static readonly Vector4 HeaderAccentColor = new(0.82f, 0.70f, 0.39f, 1.0f);
-    private static readonly Vector4 SubtleAccentColor = new(0.67f, 0.60f, 0.45f, 1.0f);
-    private static readonly Vector4 MutedTextColor = new(0.72f, 0.72f, 0.72f, 1.0f);
-    private static readonly Vector4 PanelBorderColor = new(0.34f, 0.31f, 0.24f, 1.0f);
-    private static readonly Vector4 ToolbarBackgroundColor = new(0.12f, 0.12f, 0.10f, 1.0f);
-    private static readonly Vector4 CardBackgroundColor = new(0.14f, 0.14f, 0.12f, 1.0f);
-    private static readonly Vector4 RowBackgroundColor = new(0.13f, 0.13f, 0.11f, 1.0f);
-    private static readonly Vector4 ExpandedRowBackgroundColor = new(0.17f, 0.16f, 0.13f, 1.0f);
-    private static readonly Vector4 BadgeBackgroundColor = new(0.27f, 0.23f, 0.15f, 1.0f);
-    private static readonly Vector4 SelectedChipBackgroundColor = new(0.37f, 0.30f, 0.18f, 1.0f);
-    private static readonly Vector4 SelectedChipHoverColor = new(0.44f, 0.36f, 0.22f, 1.0f);
-    private static readonly Vector4 SelectedChipActiveColor = new(0.48f, 0.39f, 0.23f, 1.0f);
-    private static readonly Vector4 NeutralChipBackgroundColor = new(0.18f, 0.18f, 0.16f, 1.0f);
-    private static readonly Vector4 NeutralChipHoverColor = new(0.24f, 0.24f, 0.21f, 1.0f);
-    private static readonly Vector4 NeutralChipActiveColor = new(0.28f, 0.28f, 0.24f, 1.0f);
+    private static readonly Vector4 HeaderAccentColor = new(0.91f, 0.83f, 0.56f, 1.0f);
+    private static readonly Vector4 SubtleAccentColor = new(0.76f, 0.70f, 0.55f, 1.0f);
+    private static readonly Vector4 MutedTextColor = new(0.69f, 0.69f, 0.67f, 1.0f);
+    private static readonly Vector4 PanelBorderColor = new(0.38f, 0.33f, 0.24f, 1.0f);
+    private static readonly Vector4 ToolbarBackgroundColor = new(0.08f, 0.08f, 0.07f, 1.0f);
+    private static readonly Vector4 CardBackgroundColor = new(0.11f, 0.10f, 0.09f, 1.0f);
+    private static readonly Vector4 RowBackgroundColor = new(0.17f, 0.16f, 0.14f, 1.0f);
+    private static readonly Vector4 ExpandedRowBackgroundColor = new(0.21f, 0.19f, 0.16f, 1.0f);
+    private static readonly Vector4 BadgeBackgroundColor = new(0.25f, 0.21f, 0.14f, 1.0f);
+    private static readonly Vector4 SelectedChipBackgroundColor = new(0.34f, 0.27f, 0.14f, 1.0f);
+    private static readonly Vector4 SelectedChipHoverColor = new(0.42f, 0.33f, 0.18f, 1.0f);
+    private static readonly Vector4 SelectedChipActiveColor = new(0.47f, 0.37f, 0.21f, 1.0f);
+    private static readonly Vector4 NeutralChipBackgroundColor = new(0.15f, 0.15f, 0.13f, 1.0f);
+    private static readonly Vector4 NeutralChipHoverColor = new(0.21f, 0.21f, 0.18f, 1.0f);
+    private static readonly Vector4 NeutralChipActiveColor = new(0.25f, 0.25f, 0.21f, 1.0f);
+    private static readonly Vector4 SelfAccentColor = new(0.91f, 0.83f, 0.56f, 1.0f);
+    private static readonly Vector4 PartyAccentColor = new(0.40f, 0.80f, 1.0f, 1.0f);
+    private static readonly Vector4 OtherAccentColor = new(0.88f, 0.88f, 0.85f, 1.0f);
 
     private readonly LootCaptureService lootCaptureService;
     private readonly Configuration configuration;
@@ -215,8 +218,15 @@ public sealed class MainWindow : Window, IDisposable
             return;
         }
 
+        ImGui.PushStyleColor(ImGuiCol.Tab, NeutralChipBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.TabHovered, SelectedChipHoverColor);
+        ImGui.PushStyleColor(ImGuiCol.TabActive, SelectedChipBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.TabUnfocused, NeutralChipBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.TabUnfocusedActive, SelectedChipActiveColor);
+
         if (!ImGui.BeginTabBar("##loot-history-tabs"))
         {
+            ImGui.PopStyleColor(5);
             return;
         }
 
@@ -239,6 +249,7 @@ public sealed class MainWindow : Window, IDisposable
         }
 
         ImGui.EndTabBar();
+        ImGui.PopStyleColor(5);
     }
 
     private void ApplyWindowLayout(bool compactMode, ImGuiCond sizeCondition)
@@ -461,6 +472,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.Border, PanelBorderColor);
         ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 7f);
         ImGui.BeginChild("##history-row", new Vector2(-1, rowHeight), true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        this.DrawRowAccentBar(record);
 
         if (ImGui.SmallButton(expanded ? "-" : "+"))
         {
@@ -540,10 +552,12 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawQuantityBadge(int quantity)
     {
-        ImGui.PushStyleColor(ImGuiCol.Button, BadgeBackgroundColor);
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, BadgeBackgroundColor);
-        ImGui.PushStyleColor(ImGuiCol.ButtonActive, BadgeBackgroundColor);
-        ImGui.PushStyleColor(ImGuiCol.Text, HeaderAccentColor);
+        var backgroundColor = GetQuantityBadgeBackgroundColor(quantity);
+        var textColor = GetQuantityBadgeTextColor(quantity);
+        ImGui.PushStyleColor(ImGuiCol.Button, backgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, backgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, backgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, textColor);
         ImGui.SmallButton($"x{quantity}");
         ImGui.PopStyleColor(4);
     }
@@ -1249,6 +1263,18 @@ public sealed class MainWindow : Window, IDisposable
         }
     }
 
+    private void DrawRowAccentBar(LootRecord record)
+    {
+        var drawList = ImGui.GetWindowDrawList();
+        var windowPos = ImGui.GetWindowPos();
+        var windowSize = ImGui.GetWindowSize();
+        var accentColor = GetRowAccentColor(record);
+        drawList.AddRectFilled(
+            windowPos,
+            windowPos + new Vector2(4f, windowSize.Y),
+            ImGui.GetColorU32(accentColor));
+    }
+
     private void DrawEnumCombo<TEnum>(string id, IReadOnlyList<TEnum> values, ref TEnum currentValue, Func<TEnum, string> labelSelector, float width, Action<TEnum> onChanged)
         where TEnum : struct, Enum
     {
@@ -1456,12 +1482,12 @@ public sealed class MainWindow : Window, IDisposable
     {
         return rarity switch
         {
-            1 => new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
-            2 => new Vector4(0.3f, 1.0f, 0.3f, 1.0f),
-            3 => new Vector4(0.4f, 0.6f, 1.0f, 1.0f),
-            4 => new Vector4(0.8f, 0.4f, 1.0f, 1.0f),
-            7 => new Vector4(1.0f, 0.6f, 0.8f, 1.0f),
-            _ => new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
+            1 => new Vector4(0.80f, 0.80f, 0.80f, 1.0f),
+            2 => new Vector4(0.51f, 0.83f, 0.39f, 1.0f),
+            3 => new Vector4(0.31f, 0.55f, 0.81f, 1.0f),
+            4 => new Vector4(0.65f, 0.51f, 0.81f, 1.0f),
+            7 => new Vector4(0.65f, 0.51f, 0.81f, 1.0f),
+            _ => new Vector4(0.92f, 0.92f, 0.92f, 1.0f),
         };
     }
 
@@ -1469,10 +1495,60 @@ public sealed class MainWindow : Window, IDisposable
     {
         return confidence switch
         {
-            LootWhoConfidence.Self => new Vector4(0.45f, 0.95f, 0.45f, 1.0f),
-            LootWhoConfidence.PartyOrAllianceVerified => new Vector4(0.45f, 0.75f, 1.0f, 1.0f),
-            _ => new Vector4(0.90f, 0.90f, 0.90f, 1.0f),
+            LootWhoConfidence.Self => SelfAccentColor,
+            LootWhoConfidence.PartyOrAllianceVerified => PartyAccentColor,
+            _ => OtherAccentColor,
         };
+    }
+
+    private static Vector4 GetRowAccentColor(LootRecord record)
+    {
+        if (record.Rarity is uint rarity)
+        {
+            return GetRarityColor(rarity);
+        }
+
+        return record.WhoConfidence switch
+        {
+            LootWhoConfidence.Self => new Vector4(SelfAccentColor.X, SelfAccentColor.Y, SelfAccentColor.Z, 0.85f),
+            LootWhoConfidence.PartyOrAllianceVerified => new Vector4(PartyAccentColor.X, PartyAccentColor.Y, PartyAccentColor.Z, 0.85f),
+            _ => new Vector4(SubtleAccentColor.X, SubtleAccentColor.Y, SubtleAccentColor.Z, 0.60f),
+        };
+    }
+
+    private static Vector4 GetQuantityBadgeBackgroundColor(int quantity)
+    {
+        if (quantity >= 99)
+        {
+            return new Vector4(0.43f, 0.18f, 0.18f, 1.0f);
+        }
+
+        if (quantity >= 10)
+        {
+            return new Vector4(0.34f, 0.27f, 0.14f, 1.0f);
+        }
+
+        if (quantity <= 1)
+        {
+            return NeutralChipBackgroundColor;
+        }
+
+        return BadgeBackgroundColor;
+    }
+
+    private static Vector4 GetQuantityBadgeTextColor(int quantity)
+    {
+        if (quantity >= 99)
+        {
+            return new Vector4(1.0f, 0.90f, 0.90f, 1.0f);
+        }
+
+        if (quantity <= 1)
+        {
+            return SubtleAccentColor;
+        }
+
+        return HeaderAccentColor;
     }
 
     private sealed record TableColumnDefinition(string Label, ImGuiTableColumnFlags Flags, float Width, Action<LootRecord> DrawCell);
