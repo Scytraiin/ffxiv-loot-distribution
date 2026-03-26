@@ -24,6 +24,10 @@ public static class LootRecipientResolver
         string? localPlayerName,
         ushort? localHomeWorldId)
     {
+        // Resolution order matters:
+        // 1. structured player/world data
+        // 2. exact current party/alliance verification
+        // 3. text-only fallback when the line still looks like a real character name
         if (string.IsNullOrWhiteSpace(subjectText))
         {
             return Unknown();
@@ -185,6 +189,8 @@ public static class LootRecipientResolver
             return string.Empty;
         }
 
+        // Loose normalization intentionally strips punctuation and world suffix separators so
+        // payload-backed names can still line up with text rendered in different formats.
         return new string(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
     }
 

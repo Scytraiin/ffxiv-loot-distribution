@@ -75,6 +75,8 @@ public sealed class ItemClassificationService
             return string.Empty;
         }
 
+        // Normalize the display-facing loot text into something that can match the local item
+        // sheet reliably: remove leading quantities, optional articles, and HQ suffix noise.
         var trimmed = itemName.Trim();
         var quantityEnd = 0;
         while (quantityEnd < trimmed.Length && char.IsDigit(trimmed[quantityEnd]))
@@ -141,6 +143,8 @@ public sealed class ItemClassificationService
             return null;
         }
 
+        // Lumina exposes EquipSlotCategory as a generated type, so reflection keeps the mapping
+        // table simple without hardcoding against one concrete runtime class.
         var type = equipSlotCategory.GetType();
         foreach (var (propertyName, label) in EquipSlotLabels)
         {

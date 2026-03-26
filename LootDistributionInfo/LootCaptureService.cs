@@ -203,6 +203,9 @@ public sealed class LootCaptureService : IDisposable
 
     private LootRecord BuildRecord(LootParseResult parsedLoot, LootCaptureSource source, SeString? message, ILogMessage? logMessage)
     {
+        // Record construction is where the raw matcher output turns into a durable UI record:
+        // recipient verification, zone snapshot, loot-type bucket, and item metadata are all
+        // resolved here so later browsing does not depend on current in-game state.
         var resolvedRecipient = LootRecipientResolver.Resolve(
             parsedLoot.SubjectText,
             this.GetStructuredRecipientCandidates(message, logMessage),
@@ -290,6 +293,8 @@ public sealed class LootCaptureService : IDisposable
             this.AddLogEntityCandidate(candidates, logMessage.TargetEntity);
         }
 
+        // Chat payloads and structured log entities can point at the same player, so collapse them
+        // into a unique recipient candidate list before verification.
         return candidates
             .GroupBy(candidate => $"{LootMatcher.NormalizeForNameMatch(candidate.BaseName)}|{candidate.HomeWorldId}")
             .Select(group => group.First())
@@ -354,6 +359,8 @@ public sealed class LootCaptureService : IDisposable
             return null;
         }
 
+        // Item payloads are the most reliable way to get an item id/icon source. The fallback
+        // path later is exact-name lookup against the item sheet.
         foreach (var payload in message.Payloads)
         {
             if (payload is ItemPayload itemPayload)

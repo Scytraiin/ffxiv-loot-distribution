@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
@@ -9,6 +10,32 @@ namespace LootDistributionInfo.Windows;
 
 public sealed class ConfigWindow : Window, IDisposable
 {
+    private static readonly LootHistoryQuickFilter[] QuickFilters =
+    [
+        LootHistoryQuickFilter.All,
+        LootHistoryQuickFilter.Self,
+        LootHistoryQuickFilter.Dungeon,
+        LootHistoryQuickFilter.Raid,
+        LootHistoryQuickFilter.Favorites,
+    ];
+
+    private static readonly LootHistoryGroupingMode[] GroupingModes =
+    [
+        LootHistoryGroupingMode.Flat,
+        LootHistoryGroupingMode.ByZone,
+        LootHistoryGroupingMode.ByItem,
+        LootHistoryGroupingMode.ByRecipient,
+    ];
+
+    private static readonly LootHistorySortMode[] SortModes =
+    [
+        LootHistorySortMode.NewestFirst,
+        LootHistorySortMode.OldestFirst,
+        LootHistorySortMode.QuantityHighToLow,
+        LootHistorySortMode.ItemName,
+        LootHistorySortMode.RecipientName,
+    ];
+
     private readonly Configuration configuration;
     private readonly LootCaptureService lootCaptureService;
     private readonly Action openDebugUi;
@@ -34,8 +61,10 @@ public sealed class ConfigWindow : Window, IDisposable
         var debugModeEnabled = this.configuration.DebugModeEnabled;
         var showItemIcons = this.configuration.ShowItemIcons;
         var showItemTooltips = this.configuration.ShowItemTooltips;
-        var showOnlySelfLoot = this.configuration.ShowOnlySelfLoot;
         var useCompactMainWindowByDefault = this.configuration.UseCompactMainWindowByDefault;
+        var defaultQuickFilter = this.configuration.DefaultQuickFilter;
+        var defaultGroupingMode = this.configuration.DefaultGroupingMode;
+        var defaultSortMode = this.configuration.DefaultSortMode;
         var changed = false;
 
         if (ImGui.Checkbox("Save history between sessions", ref retainHistory))
@@ -68,21 +97,34 @@ public sealed class ConfigWindow : Window, IDisposable
             changed = true;
         }
 
-        if (ImGui.Checkbox("Default to self-only filter", ref showOnlySelfLoot))
-        {
-            this.configuration.ShowOnlySelfLoot = showOnlySelfLoot;
-            changed = true;
-        }
-
         if (ImGui.Checkbox("Use compact main window by default", ref useCompactMainWindowByDefault))
         {
             this.configuration.UseCompactMainWindowByDefault = useCompactMainWindowByDefault;
             changed = true;
         }
 
+        if (DrawEnumCombo("Default quick filter", QuickFilters, ref defaultQuickFilter, LootHistoryBrowser.GetQuickFilterLabel))
+        {
+            this.configuration.DefaultQuickFilter = defaultQuickFilter;
+            changed = true;
+        }
+
+        if (DrawEnumCombo("Default grouping", GroupingModes, ref defaultGroupingMode, LootHistoryBrowser.GetGroupingLabel))
+        {
+            this.configuration.DefaultGroupingMode = defaultGroupingMode;
+            changed = true;
+        }
+
+        if (DrawEnumCombo("Default sort", SortModes, ref defaultSortMode, LootHistoryBrowser.GetSortLabel))
+        {
+            this.configuration.DefaultSortMode = defaultSortMode;
+            changed = true;
+        }
+
         ImGui.Spacing();
         ImGui.TextWrapped("Your loot history can stay available between sessions. Turn this off if you only want to keep the current play session.");
         ImGui.TextWrapped("Compact mode shows only who got the loot, how much they got, and the loot name.");
+        ImGui.TextDisabled($"Favorite items saved: {this.configuration.FavoriteItemIds.Count}");
 
         ImGui.Spacing();
         changed |= this.DrawColumnVisibilitySection();
@@ -140,6 +182,33 @@ public sealed class ConfigWindow : Window, IDisposable
                 ImGui.PopID();
             }
         }
+    }
+
+    private static bool DrawEnumCombo<TEnum>(string label, IReadOnlyList<TEnum> values, ref TEnum currentValue, Func<TEnum, string> labelSelector)
+        where TEnum : struct, Enum
+    {
+        var changed = false;
+        if (ImGui.BeginCombo(label, labelSelector(currentValue)))
+        {
+            foreach (var value in values)
+            {
+                var selected = EqualityComparer<TEnum>.Default.Equals(value, currentValue);
+                if (ImGui.Selectable(labelSelector(value), selected))
+                {
+                    currentValue = value;
+                    changed = true;
+                }
+
+                if (selected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
+        return changed;
     }
 
     private bool DrawColumnVisibilitySection()

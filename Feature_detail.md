@@ -246,16 +246,20 @@ Lets users narrow the visible history rows without deleting data.
 Shared controls above the tabs:
 
 - search box
-- `Self only`
-- group filter
-- loot type filter
+- quick filter chips: `All`, `Self`, `Dungeon`, `Raid`, `Favorites`
+- grouping selector
+- sort selector
+- recipient filter
 - category filter
 - zone filter
+- clear history, settings, and debug-log actions
 
 ### What data it depends on
 
 - current in-memory/persisted records
 - resolved category and zone fields
+- favorite item ids
+- stored default quick filter, grouping, and sort preferences
 
 ### Fallback behavior
 
@@ -269,36 +273,44 @@ If filters exclude all rows, the UI shows a no-match message instead of clearing
 
 ### What it does
 
-Shows the primary day-to-day loot table for recent browsing.
+Shows the primary day-to-day history browser for recent browsing.
 
 ### How it appears in the UI
 
-Columns:
+The tab is rendered as grouped, sortable history rows instead of a plain always-wide table.
 
-- `Time`
-- `Zone`
-- `Who`
-- `Group`
-- `Quantity`
-- `Icon`
-- `Loot`
-- `Raw Line`
-- debug-only `Source`
+Each row shows a compact summary and can be expanded to reveal:
+
+- raw line
+- classification
+- zone
+- timestamp
+- loot type
+- actions such as copy, pin, and hide
+
+Grouping options:
+
+- `Flat`
+- `By Zone`
+- `By Item`
+- `By Recipient`
 
 ### What data it depends on
 
 - all captured/enriched loot records
 - active filters
 - blacklist state
+- favorite item ids
+- stored grouping and sort defaults
 
 ### Fallback behavior
 
-The raw line remains visible even when parsing is incomplete.
+Expanded rows always expose the raw line even when parsing or metadata resolution is incomplete.
 
 ### Limits / known gaps
 
 - This tab is intentionally a readable history view, not a full analytics view.
-- Column visibility is user-configurable through settings.
+- Column visibility affects the summary presentation, while the expanded drawer still shows the most important details.
 
 ## Item Details Tab
 
@@ -314,6 +326,7 @@ Adds classification and item-category metadata on top of the core loot columns.
 
 - resolved item-sheet metadata
 - active filters
+- current quick-filter/group/filter selections
 
 ### Fallback behavior
 
@@ -374,7 +387,7 @@ Shows:
 
 ### What data it depends on
 
-- current visible record set after filters and blacklist
+- current visible record set after filters, favorites, and blacklist
 
 ### Fallback behavior
 
@@ -424,8 +437,12 @@ Settings include:
 - `Show debug tools`
 - `Show item icons`
 - `Show item tooltips`
-- `Default to self-only filter`
+- `Use compact main window by default`
+- `Default quick filter`
+- `Default grouping`
+- `Default sort`
 - blacklist management
+- favorite item persistence
 
 ### What data it depends on
 

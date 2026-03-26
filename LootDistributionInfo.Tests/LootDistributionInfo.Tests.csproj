@@ -18,6 +18,7 @@
     <Compile Include="..\LootDistributionInfo\LootHistory.cs" Link="Plugin\LootHistory.cs" />
     <Compile Include="..\LootDistributionInfo\ItemCategoryMappings.cs" Link="Plugin\ItemCategoryMappings.cs" />
     <Compile Include="..\LootDistributionInfo\LootOverviewSummary.cs" Link="Plugin\LootOverviewSummary.cs" />
+    <Compile Include="..\LootDistributionInfo\LootHistoryBrowser.cs" Link="Plugin\LootHistoryBrowser.cs" />
     <Compile Include="..\LootDistributionInfo\LootMatcher.cs" Link="Plugin\LootMatcher.cs" />
     <Compile Include="..\LootDistributionInfo\LootParseResult.cs" Link="Plugin\LootParseResult.cs" />
     <Compile Include="..\LootDistributionInfo\LootQuantityParser.cs" Link="Plugin\LootQuantityParser.cs" />

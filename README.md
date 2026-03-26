@@ -16,6 +16,7 @@ It also contains:
 - a custom Dalamud repository JSON
 - Docker-based validation support
 - tracked feature documentation in `Feature_detail.md`
+- tracked architecture documentation in `Architecture.md`
 
 ---
 
@@ -121,3 +122,4 @@ For plugin-specific details, see:
 
 - `LootDistributionInfo/README.md`
 - `Feature_detail.md`
+- `Architecture.md`

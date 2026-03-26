@@ -12,17 +12,67 @@ namespace LootDistributionInfo.Windows;
 
 public sealed class MainWindow : Window, IDisposable
 {
-    private static readonly string[] GroupFilters = ["All groups", "Self", "Party/Alliance", "Other"];
-    private static readonly string[] LootTypeFilters = ["All loot", "Dungeon loot", "Raid loot"];
+    private static readonly LootHistoryQuickFilter[] QuickFilters =
+    [
+        LootHistoryQuickFilter.All,
+        LootHistoryQuickFilter.Self,
+        LootHistoryQuickFilter.Dungeon,
+        LootHistoryQuickFilter.Raid,
+        LootHistoryQuickFilter.Favorites,
+    ];
+
+    private static readonly LootHistoryGroupingMode[] GroupingModes =
+    [
+        LootHistoryGroupingMode.Flat,
+        LootHistoryGroupingMode.ByZone,
+        LootHistoryGroupingMode.ByItem,
+        LootHistoryGroupingMode.ByRecipient,
+    ];
+
+    private static readonly LootHistorySortMode[] SortModes =
+    [
+        LootHistorySortMode.NewestFirst,
+        LootHistorySortMode.OldestFirst,
+        LootHistorySortMode.QuantityHighToLow,
+        LootHistorySortMode.ItemName,
+        LootHistorySortMode.RecipientName,
+    ];
+
+    private static readonly LootRecipientFilter[] RecipientFilters =
+    [
+        LootRecipientFilter.All,
+        LootRecipientFilter.Self,
+        LootRecipientFilter.PartyAlliance,
+        LootRecipientFilter.Other,
+    ];
+
+    private static readonly Vector4 HeaderAccentColor = new(0.82f, 0.70f, 0.39f, 1.0f);
+    private static readonly Vector4 SubtleAccentColor = new(0.67f, 0.60f, 0.45f, 1.0f);
+    private static readonly Vector4 MutedTextColor = new(0.72f, 0.72f, 0.72f, 1.0f);
+    private static readonly Vector4 PanelBorderColor = new(0.34f, 0.31f, 0.24f, 1.0f);
+    private static readonly Vector4 ToolbarBackgroundColor = new(0.12f, 0.12f, 0.10f, 1.0f);
+    private static readonly Vector4 CardBackgroundColor = new(0.14f, 0.14f, 0.12f, 1.0f);
+    private static readonly Vector4 RowBackgroundColor = new(0.13f, 0.13f, 0.11f, 1.0f);
+    private static readonly Vector4 ExpandedRowBackgroundColor = new(0.17f, 0.16f, 0.13f, 1.0f);
+    private static readonly Vector4 BadgeBackgroundColor = new(0.27f, 0.23f, 0.15f, 1.0f);
+    private static readonly Vector4 SelectedChipBackgroundColor = new(0.37f, 0.30f, 0.18f, 1.0f);
+    private static readonly Vector4 SelectedChipHoverColor = new(0.44f, 0.36f, 0.22f, 1.0f);
+    private static readonly Vector4 SelectedChipActiveColor = new(0.48f, 0.39f, 0.23f, 1.0f);
+    private static readonly Vector4 NeutralChipBackgroundColor = new(0.18f, 0.18f, 0.16f, 1.0f);
+    private static readonly Vector4 NeutralChipHoverColor = new(0.24f, 0.24f, 0.21f, 1.0f);
+    private static readonly Vector4 NeutralChipActiveColor = new(0.28f, 0.28f, 0.24f, 1.0f);
 
     private readonly LootCaptureService lootCaptureService;
     private readonly Configuration configuration;
     private readonly ITextureProvider textureProvider;
     private readonly Action openConfigUi;
     private readonly Action openDebugUi;
+    private readonly HashSet<string> expandedRowKeys = [];
     private string filterText = string.Empty;
-    private int selectedLootTypeFilter;
-    private int selectedGroupFilter;
+    private LootHistoryQuickFilter selectedQuickFilter;
+    private LootHistoryGroupingMode selectedGroupingMode;
+    private LootHistorySortMode selectedSortMode;
+    private LootRecipientFilter selectedRecipientFilter;
     private string selectedCategoryFilter = string.Empty;
     private string selectedZoneFilter = string.Empty;
 
@@ -39,26 +89,12 @@ public sealed class MainWindow : Window, IDisposable
         this.textureProvider = textureProvider;
         this.openConfigUi = openConfigUi;
         this.openDebugUi = openDebugUi;
+        this.selectedQuickFilter = configuration.DefaultQuickFilter;
+        this.selectedGroupingMode = configuration.DefaultGroupingMode;
+        this.selectedSortMode = configuration.DefaultSortMode;
 
         this.SizeCondition = ImGuiCond.FirstUseEver;
-        if (this.configuration.UseCompactMainWindowByDefault)
-        {
-            this.Size = new Vector2(560, 340);
-            this.SizeConstraints = new WindowSizeConstraints
-            {
-                MinimumSize = new Vector2(420, 220),
-                MaximumSize = new Vector2(900, 620),
-            };
-        }
-        else
-        {
-            this.Size = new Vector2(1180, 520);
-            this.SizeConstraints = new WindowSizeConstraints
-            {
-                MinimumSize = new Vector2(900, 320),
-                MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
-            };
-        }
+        this.ApplyWindowLayout(this.configuration.UseCompactMainWindowByDefault);
     }
 
     public void Dispose()
@@ -74,34 +110,48 @@ public sealed class MainWindow : Window, IDisposable
             .Where(record => !this.IsBlacklisted(record))
             .ToList();
 
-        var visibleRecords = nonBlacklistedRecords
-            .Where(this.RecordMatchesCurrentFilters)
-            .ToList();
-
         if (compactMode)
         {
-            this.DrawCompactToolbar();
-            ImGui.Spacing();
-
-            if (nonBlacklistedRecords.Count == 0)
-            {
-                ImGui.TextUnformatted("No loot recorded yet.");
-                return;
-            }
-
-            if (visibleRecords.Count == 0)
-            {
-                ImGui.TextUnformatted("No loot matches the current search.");
-                return;
-            }
-
-            this.DrawCompactTable(visibleRecords);
+            this.DrawCompactView(nonBlacklistedRecords);
             return;
         }
 
-        ImGui.TextWrapped("Tracks loot messages and keeps a searchable history of where the loot happened and who received it.");
-        ImGui.Separator();
+        this.DrawFullView(nonBlacklistedRecords);
+    }
 
+    private void DrawCompactView(IReadOnlyList<LootRecord> nonBlacklistedRecords)
+    {
+        this.DrawCompactHeader(nonBlacklistedRecords.Count);
+        ImGui.Spacing();
+
+        if (nonBlacklistedRecords.Count == 0)
+        {
+            ImGui.TextUnformatted("No loot recorded yet.");
+            return;
+        }
+
+        var visibleRecords = LootHistoryBrowser.FilterAndSort(
+            nonBlacklistedRecords,
+            new LootHistoryBrowseOptions(
+                this.filterText,
+                LootHistoryQuickFilter.All,
+                LootHistorySortMode.NewestFirst,
+                LootRecipientFilter.All,
+                string.Empty,
+                string.Empty,
+                this.configuration.FavoriteItemIds));
+
+        if (visibleRecords.Count == 0)
+        {
+            ImGui.TextUnformatted("No loot matches the current search.");
+            return;
+        }
+
+        this.DrawCompactTable(visibleRecords);
+    }
+
+    private void DrawFullView(IReadOnlyList<LootRecord> nonBlacklistedRecords)
+    {
         var categoryFilters = nonBlacklistedRecords
             .Select(record => record.ItemCategoryLabel ?? "Unknown")
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -114,7 +164,14 @@ public sealed class MainWindow : Window, IDisposable
             .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        this.DrawFullFilters(categoryFilters, zoneFilters);
+        var visibleRecords = LootHistoryBrowser.FilterAndSort(nonBlacklistedRecords, this.BuildBrowseOptions());
+        var groupedRecords = LootHistoryBrowser.Group(visibleRecords, this.selectedGroupingMode);
+
+        // Full mode is intentionally treated as a browser, not just a table: the toolbar defines
+        // the visible slice, then tabs decide how that same slice is rendered.
+        this.DrawHeaderStrip(nonBlacklistedRecords.Count, visibleRecords.Count);
+        ImGui.Spacing();
+        this.DrawBrowserToolbar(categoryFilters, zoneFilters);
         ImGui.Spacing();
 
         if (nonBlacklistedRecords.Count == 0)
@@ -136,7 +193,7 @@ public sealed class MainWindow : Window, IDisposable
 
         if (ImGui.BeginTabItem("Loot History"))
         {
-            this.DrawConfiguredTable("##loot-history", this.BuildLootHistoryColumns(), visibleRecords);
+            this.DrawHistoryBrowser(groupedRecords);
             ImGui.EndTabItem();
         }
 
@@ -169,22 +226,40 @@ public sealed class MainWindow : Window, IDisposable
         }
         else
         {
-            this.Size = new Vector2(1180, 520);
+            this.Size = new Vector2(1180, 620);
             this.SizeConstraints = new WindowSizeConstraints
             {
-                MinimumSize = new Vector2(900, 320),
+                MinimumSize = new Vector2(920, 400),
                 MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
             };
-            ImGui.SetWindowSize(new Vector2(1180, 520), ImGuiCond.Appearing);
+            ImGui.SetWindowSize(new Vector2(1180, 620), ImGuiCond.Appearing);
         }
     }
 
-    private void DrawCompactToolbar()
+    private LootHistoryBrowseOptions BuildBrowseOptions()
     {
-        ImGui.SetNextItemWidth(220);
-        ImGui.InputTextWithHint("##compact-loot-filter", "Search loot...", ref this.filterText, 256);
+        return new LootHistoryBrowseOptions(
+            this.filterText,
+            this.selectedQuickFilter,
+            this.selectedSortMode,
+            this.selectedRecipientFilter,
+            this.selectedCategoryFilter,
+            this.selectedZoneFilter,
+            this.configuration.FavoriteItemIds);
+    }
+
+    private void DrawCompactHeader(int totalEntries)
+    {
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, ToolbarBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.Border, PanelBorderColor);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 6f);
+        ImGui.BeginChild("##compact-toolbar", new Vector2(-1, 70f), true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        ImGui.TextColored(HeaderAccentColor, "Loot History");
         ImGui.SameLine();
-        ImGui.TextUnformatted($"Entries: {this.lootCaptureService.Records.Count}");
+        ImGui.TextDisabled($"Compact view • {totalEntries} entries");
+
+        ImGui.SetNextItemWidth(220f);
+        ImGui.InputTextWithHint("##compact-loot-filter", "Search loot...", ref this.filterText, 256);
         ImGui.SameLine();
         if (ImGui.Button("Clear"))
         {
@@ -196,41 +271,77 @@ public sealed class MainWindow : Window, IDisposable
         {
             this.openConfigUi();
         }
+
+        ImGui.EndChild();
+        ImGui.PopStyleVar();
+        ImGui.PopStyleColor(2);
     }
 
-    private void DrawFullFilters(IReadOnlyList<string> categoryFilters, IReadOnlyList<string> zoneFilters)
+    private void DrawHeaderStrip(int totalEntries, int visibleEntries)
     {
-        ImGui.SetNextItemWidth(260);
-        ImGui.InputTextWithHint("##loot-filter", "Search loot history...", ref this.filterText, 256);
-        ImGui.SameLine();
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, ToolbarBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.Border, PanelBorderColor);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 8f);
+        ImGui.BeginChild("##history-header", new Vector2(-1, 68f), true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        ImGui.TextColored(HeaderAccentColor, "Loot History");
+        ImGui.TextDisabled("A curated loot browser with grouping, sorting, favorites, and detailed item context.");
 
-        var showOnlySelfLoot = this.configuration.ShowOnlySelfLoot;
-        if (ImGui.Checkbox("Self only", ref showOnlySelfLoot))
+        var statsLabel = visibleEntries == totalEntries
+            ? $"{totalEntries} visible entries"
+            : $"{visibleEntries} of {totalEntries} visible";
+
+        var statsSize = ImGui.CalcTextSize(statsLabel);
+        ImGui.SameLine(MathF.Max(0f, ImGui.GetContentRegionAvail().X - statsSize.X));
+        ImGui.TextColored(SubtleAccentColor, statsLabel);
+        ImGui.EndChild();
+        ImGui.PopStyleVar();
+        ImGui.PopStyleColor(2);
+    }
+
+    private void DrawBrowserToolbar(IReadOnlyList<string> categoryFilters, IReadOnlyList<string> zoneFilters)
+    {
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, CardBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.Border, PanelBorderColor);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 8f);
+        ImGui.BeginChild("##history-toolbar", new Vector2(-1, 114f), true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+
+        ImGui.TextColored(SubtleAccentColor, "Quick Filters");
+        ImGui.SameLine();
+        foreach (var quickFilter in QuickFilters)
         {
-            this.configuration.ShowOnlySelfLoot = showOnlySelfLoot;
-            this.configuration.Save();
+            this.DrawQuickFilterChip(quickFilter);
+            ImGui.SameLine();
         }
 
-        ImGui.SameLine();
-        this.DrawCombo("##group-filter", GroupFilters, ref this.selectedGroupFilter, 120f);
+        ImGui.NewLine();
+        ImGui.Spacing();
 
+        ImGui.SetNextItemWidth(230f);
+        ImGui.InputTextWithHint("##loot-filter", "Search loot history...", ref this.filterText, 256);
         ImGui.SameLine();
-        this.DrawCombo("##loot-type-filter", LootTypeFilters, ref this.selectedLootTypeFilter, 125f);
-
+        this.DrawEnumCombo("##grouping-mode", GroupingModes, ref this.selectedGroupingMode, LootHistoryBrowser.GetGroupingLabel, 118f, value =>
+        {
+            this.configuration.DefaultGroupingMode = value;
+            this.configuration.Save();
+        });
+        ImGui.SameLine();
+        this.DrawEnumCombo("##sort-mode", SortModes, ref this.selectedSortMode, LootHistoryBrowser.GetSortLabel, 145f, value =>
+        {
+            this.configuration.DefaultSortMode = value;
+            this.configuration.Save();
+        });
+        ImGui.SameLine();
+        this.DrawEnumCombo("##recipient-filter", RecipientFilters, ref this.selectedRecipientFilter, GetRecipientFilterLabel, 130f, _ => { });
         ImGui.SameLine();
         this.DrawStringFilterCombo("##category-filter", "All categories", categoryFilters, ref this.selectedCategoryFilter, 150f);
-
         ImGui.SameLine();
-        this.DrawStringFilterCombo("##zone-filter", "All zones", zoneFilters, ref this.selectedZoneFilter, 150f);
-
+        this.DrawStringFilterCombo("##zone-filter", "All zones", zoneFilters, ref this.selectedZoneFilter, 145f);
         ImGui.SameLine();
         if (ImGui.Button("Clear history"))
         {
             this.lootCaptureService.ClearHistory();
+            this.expandedRowKeys.Clear();
         }
-
-        ImGui.SameLine();
-        ImGui.TextUnformatted($"Entries: {this.lootCaptureService.Records.Count}");
 
         ImGui.SameLine();
         if (ImGui.Button("Settings"))
@@ -238,11 +349,288 @@ public sealed class MainWindow : Window, IDisposable
             this.openConfigUi();
         }
 
-        ImGui.SameLine();
-        if (this.lootCaptureService.DebugModeEnabled && ImGui.Button("Open debug log"))
+        if (this.lootCaptureService.DebugModeEnabled)
         {
-            this.openDebugUi();
+            ImGui.SameLine();
+            if (ImGui.Button("Open debug log"))
+            {
+                this.openDebugUi();
+            }
         }
+
+        ImGui.EndChild();
+        ImGui.PopStyleVar();
+        ImGui.PopStyleColor(2);
+    }
+
+    private void DrawQuickFilterChip(LootHistoryQuickFilter quickFilter)
+    {
+        var selected = this.selectedQuickFilter == quickFilter;
+        ImGui.PushStyleColor(ImGuiCol.Button, selected ? SelectedChipBackgroundColor : NeutralChipBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, selected ? SelectedChipHoverColor : NeutralChipHoverColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, selected ? SelectedChipActiveColor : NeutralChipActiveColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, selected ? HeaderAccentColor : MutedTextColor);
+
+        if (ImGui.SmallButton(LootHistoryBrowser.GetQuickFilterLabel(quickFilter)))
+        {
+            this.selectedQuickFilter = quickFilter;
+            this.configuration.DefaultQuickFilter = quickFilter;
+            this.configuration.Save();
+        }
+
+        ImGui.PopStyleColor(4);
+    }
+
+    private void DrawHistoryBrowser(IReadOnlyList<LootHistoryGroup> groups)
+    {
+        if (groups.Count == 0)
+        {
+            ImGui.TextDisabled("No visible entries.");
+            return;
+        }
+
+        foreach (var group in groups)
+        {
+            var showHeader = this.selectedGroupingMode != LootHistoryGroupingMode.Flat;
+            if (showHeader)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Header, NeutralChipBackgroundColor);
+                ImGui.PushStyleColor(ImGuiCol.HeaderHovered, NeutralChipHoverColor);
+                ImGui.PushStyleColor(ImGuiCol.HeaderActive, NeutralChipActiveColor);
+                var open = ImGui.CollapsingHeader($"{group.Label} ({group.Records.Count})", ImGuiTreeNodeFlags.DefaultOpen);
+                ImGui.PopStyleColor(3);
+                if (!open)
+                {
+                    continue;
+                }
+            }
+
+            foreach (var record in group.Records)
+            {
+                this.DrawBrowserRow(record);
+            }
+
+            if (showHeader)
+            {
+                ImGui.Spacing();
+            }
+        }
+    }
+
+    private void DrawBrowserRow(LootRecord record)
+    {
+        var rowKey = this.GetRecordKey(record);
+        var expanded = this.expandedRowKeys.Contains(rowKey);
+        var rowHeight = expanded ? 154f : 62f;
+        var backgroundColor = expanded ? ExpandedRowBackgroundColor : RowBackgroundColor;
+
+        // Each row behaves like a compact card with an optional drawer so the default history view
+        // stays scannable while still exposing full metadata and actions on demand.
+        ImGui.PushID(rowKey);
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, backgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.Border, PanelBorderColor);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 7f);
+        ImGui.BeginChild("##history-row", new Vector2(-1, rowHeight), true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+
+        if (ImGui.SmallButton(expanded ? "-" : "+"))
+        {
+            this.ToggleExpandedRow(rowKey);
+            expanded = !expanded;
+        }
+
+        if (this.configuration.ShowItemIcons && this.configuration.LootHistoryColumns.ShowIcon)
+        {
+            ImGui.SameLine();
+            this.DrawInlineIcon(record, 22f);
+        }
+
+        if (this.configuration.LootHistoryColumns.ShowQuantity)
+        {
+            ImGui.SameLine();
+            this.DrawQuantityBadge(record.Quantity);
+        }
+
+        if (this.IsFavorite(record))
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(HeaderAccentColor, "Pinned");
+        }
+
+        if (this.configuration.LootHistoryColumns.ShowLoot)
+        {
+            ImGui.SameLine();
+            this.DrawLootCell(record, "browser-loot");
+        }
+
+        ImGui.Spacing();
+
+        if (this.configuration.LootHistoryColumns.ShowWho)
+        {
+            this.DrawInlineMetaValue("Who", GetWhoLabel(record), GetGroupColor(record.WhoConfidence));
+        }
+
+        if (this.configuration.LootHistoryColumns.ShowGroup)
+        {
+            this.DrawInlineMetaValue("Group", GetGroupLabel(record.WhoConfidence), GetGroupColor(record.WhoConfidence));
+        }
+
+        if (this.configuration.LootHistoryColumns.ShowZone)
+        {
+            this.DrawInlineMetaValue("Zone", GetDisplayOrUnknown(record.ZoneName), MutedTextColor);
+        }
+
+        if (this.configuration.LootHistoryColumns.ShowTime)
+        {
+            this.DrawInlineMetaValue("When", record.CapturedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm"), MutedTextColor);
+        }
+
+        if (expanded)
+        {
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Spacing();
+            this.DrawDetailDrawer(record);
+        }
+
+        ImGui.EndChild();
+        this.DrawContextMenu(record, "browser-row");
+        ImGui.PopStyleVar();
+        ImGui.PopStyleColor(2);
+        ImGui.PopID();
+        ImGui.Spacing();
+    }
+
+    private void DrawInlineMetaValue(string label, string value, Vector4 valueColor)
+    {
+        ImGui.TextDisabled($"{label}:");
+        ImGui.SameLine(0f, 4f);
+        ImGui.TextColored(valueColor, value);
+        ImGui.SameLine(0f, 18f);
+    }
+
+    private void DrawQuantityBadge(int quantity)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Button, BadgeBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, BadgeBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, BadgeBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.Text, HeaderAccentColor);
+        ImGui.SmallButton($"x{quantity}");
+        ImGui.PopStyleColor(4);
+    }
+
+    private void DrawDetailDrawer(LootRecord record)
+    {
+        if (ImGui.BeginTable("##drawer-details", 2, ImGuiTableFlags.SizingStretchProp))
+        {
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            ImGui.TextDisabled("Classification");
+            ImGui.TextUnformatted(record.ItemCategoryLabel ?? "Unknown");
+            ImGui.TextDisabled("Filter Group");
+            ImGui.TextUnformatted(FormatLabelWithId(record.FilterGroupLabel, record.FilterGroupId));
+            ImGui.TextDisabled("Equip Slot");
+            ImGui.TextUnformatted(FormatLabelWithId(record.EquipSlotCategoryLabel, record.EquipSlotCategoryId));
+
+            ImGui.TableNextColumn();
+            ImGui.TextDisabled("Zone");
+            ImGui.TextUnformatted(GetDisplayOrUnknown(record.ZoneName));
+            ImGui.TextDisabled("Timestamp");
+            ImGui.TextUnformatted(record.CapturedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
+            ImGui.TextDisabled("Loot Type");
+            ImGui.TextUnformatted(GetLootTypeLabel(record.LootTypeBucket));
+            ImGui.EndTable();
+        }
+
+        ImGui.Spacing();
+        ImGui.TextDisabled("Raw line");
+        ImGui.PushTextWrapPos();
+        ImGui.TextUnformatted(record.RawText);
+        ImGui.PopTextWrapPos();
+        ImGui.Spacing();
+
+        if (ImGui.Button("Copy line"))
+        {
+            ImGui.SetClipboardText(this.BuildClipboardLine(record));
+        }
+
+        ImGui.SameLine();
+        this.DrawFavoriteButton(record, detailContext: true);
+
+        ImGui.SameLine();
+        this.DrawHideButton(record);
+    }
+
+    private void DrawFavoriteButton(LootRecord record, bool detailContext)
+    {
+        if (record.ItemId is not uint itemId)
+        {
+            ImGui.BeginDisabled();
+            ImGui.Button(detailContext ? "Pin item" : "Pin");
+            ImGui.EndDisabled();
+            return;
+        }
+
+        var isFavorite = this.configuration.FavoriteItemIds.Contains(itemId);
+        var label = isFavorite ? (detailContext ? "Unpin item" : "Unpin") : (detailContext ? "Pin item" : "Pin");
+        if (ImGui.Button(label))
+        {
+            if (isFavorite)
+            {
+                this.configuration.FavoriteItemIds.Remove(itemId);
+            }
+            else
+            {
+                this.configuration.FavoriteItemIds.Add(itemId);
+            }
+
+            this.configuration.FavoriteItemIds = this.configuration.FavoriteItemIds
+                .Distinct()
+                .OrderBy(value => value)
+                .ToList();
+            this.configuration.Save();
+        }
+    }
+
+    private void DrawHideButton(LootRecord record)
+    {
+        if (record.ItemId is not uint itemId)
+        {
+            ImGui.BeginDisabled();
+            ImGui.Button("Hide item");
+            ImGui.EndDisabled();
+            return;
+        }
+
+        if (ImGui.Button("Hide item"))
+        {
+            if (!this.configuration.BlacklistedItemIds.Contains(itemId))
+            {
+                this.configuration.BlacklistedItemIds.Add(itemId);
+                this.configuration.BlacklistedItemIds = this.configuration.BlacklistedItemIds
+                    .Distinct()
+                    .OrderBy(value => value)
+                    .ToList();
+                this.configuration.Save();
+            }
+        }
+    }
+
+    private void ToggleExpandedRow(string rowKey)
+    {
+        if (!this.expandedRowKeys.Add(rowKey))
+        {
+            this.expandedRowKeys.Remove(rowKey);
+        }
+    }
+
+    private string GetRecordKey(LootRecord record)
+    {
+        return $"{record.CapturedAtUtc.ToUnixTimeMilliseconds()}::{record.RawText.GetHashCode(StringComparison.Ordinal)}::{record.Source}";
+    }
+
+    private bool IsFavorite(LootRecord record)
+    {
+        return record.ItemId is uint itemId && this.configuration.FavoriteItemIds.Contains(itemId);
     }
 
     private void DrawCompactTable(IReadOnlyList<LootRecord> records)
@@ -320,59 +708,6 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.EndTable();
     }
 
-    private IReadOnlyList<TableColumnDefinition> BuildLootHistoryColumns()
-    {
-        var columns = new List<TableColumnDefinition>();
-        var visibility = this.configuration.LootHistoryColumns;
-
-        if (visibility.ShowTime)
-        {
-            columns.Add(new TableColumnDefinition("Time", ImGuiTableColumnFlags.WidthFixed, 150f, record => ImGui.TextUnformatted(record.CapturedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))));
-        }
-
-        if (visibility.ShowZone)
-        {
-            columns.Add(new TableColumnDefinition("Zone", ImGuiTableColumnFlags.WidthFixed, 170f, record => this.DrawRecordTextCell(record, GetDisplayOrUnknown(record.ZoneName), "history-zone")));
-        }
-
-        if (visibility.ShowWho)
-        {
-            columns.Add(new TableColumnDefinition("Who", ImGuiTableColumnFlags.WidthFixed, 170f, record => this.DrawRecordTextCell(record, GetWhoLabel(record), "history-who", GetGroupColor(record.WhoConfidence))));
-        }
-
-        if (visibility.ShowGroup)
-        {
-            columns.Add(new TableColumnDefinition("Group", ImGuiTableColumnFlags.WidthFixed, 120f, record => this.DrawRecordTextCell(record, GetGroupLabel(record.WhoConfidence), "history-group", GetGroupColor(record.WhoConfidence))));
-        }
-
-        if (visibility.ShowQuantity)
-        {
-            columns.Add(new TableColumnDefinition("Qty", ImGuiTableColumnFlags.WidthFixed, 70f, record => this.DrawRecordTextCell(record, record.Quantity.ToString(), "history-quantity")));
-        }
-
-        if (visibility.ShowIcon && this.configuration.ShowItemIcons)
-        {
-            columns.Add(new TableColumnDefinition("Icon", ImGuiTableColumnFlags.WidthFixed, 42f, record => this.DrawIconCell(record, "history")));
-        }
-
-        if (visibility.ShowLoot)
-        {
-            columns.Add(new TableColumnDefinition("Loot", ImGuiTableColumnFlags.WidthStretch, 230f, record => this.DrawLootCell(record, "history")));
-        }
-
-        if (visibility.ShowRawLine)
-        {
-            columns.Add(new TableColumnDefinition("Raw Line", ImGuiTableColumnFlags.WidthStretch, 320f, record => this.DrawRecordTextCell(record, record.RawText, "history-raw")));
-        }
-
-        if (visibility.ShowCopy)
-        {
-            columns.Add(new TableColumnDefinition("Copy", ImGuiTableColumnFlags.WidthFixed, 72f, record => this.DrawCopyButton(record, "history")));
-        }
-
-        return columns;
-    }
-
     private IReadOnlyList<TableColumnDefinition> BuildItemDetailsColumns()
     {
         var columns = new List<TableColumnDefinition>();
@@ -390,7 +725,7 @@ public sealed class MainWindow : Window, IDisposable
 
         if (visibility.ShowWho)
         {
-            columns.Add(new TableColumnDefinition("Who", ImGuiTableColumnFlags.WidthFixed, 170f, record => this.DrawRecordTextCell(record, GetWhoLabel(record), "details-who", GetGroupColor(record.WhoConfidence))));
+            columns.Add(new TableColumnDefinition("Who", ImGuiTableColumnFlags.WidthFixed, 190f, record => this.DrawRecordTextCell(record, GetWhoLabel(record), "details-who", GetGroupColor(record.WhoConfidence))));
         }
 
         if (visibility.ShowGroup)
@@ -460,7 +795,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         var summary = LootOverviewSummary.Build(records);
 
-        ImGui.TextUnformatted("Overview reflects the current filters.");
+        ImGui.TextDisabled("Overview reflects the current filters and favorites state.");
         ImGui.Spacing();
 
         if (ImGui.BeginTable("##overview-summary-cards", 4, ImGuiTableFlags.SizingStretchSame))
@@ -468,7 +803,7 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.TableNextRow();
 
             ImGui.TableSetColumnIndex(0);
-            this.DrawOverviewCard("Entries", summary.TotalEntries.ToString(), GetLootTypeFilterDescription());
+            this.DrawOverviewCard("Entries", summary.TotalEntries.ToString(), LootHistoryBrowser.GetQuickFilterLabel(this.selectedQuickFilter));
 
             ImGui.TableSetColumnIndex(1);
             this.DrawOverviewCard("Unique Items", summary.UniqueItems.ToString(), "Distinct visible items");
@@ -504,7 +839,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawBucketSection(string title, IReadOnlyList<LootOverviewBucket> buckets, bool showIcons)
     {
-        ImGui.TextUnformatted(title);
+        ImGui.TextColored(HeaderAccentColor, title);
         ImGui.Separator();
 
         if (buckets.Count == 0)
@@ -530,44 +865,6 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.SetCursorPosX(MathF.Max(ImGui.GetCursorPosX(), ImGui.GetWindowWidth() - 90f));
             ImGui.TextDisabled(bucket.Count.ToString());
         }
-    }
-
-    private bool RecordMatchesCurrentFilters(LootRecord record)
-    {
-        if (this.filterText.Length != 0 && !RecordMatchesFilter(record, this.filterText))
-        {
-            return false;
-        }
-
-        if (this.configuration.UseCompactMainWindowByDefault)
-        {
-            return true;
-        }
-
-        if (this.configuration.ShowOnlySelfLoot && record.WhoConfidence != LootWhoConfidence.Self)
-        {
-            return false;
-        }
-
-        if (this.selectedLootTypeFilter != 0 && record.LootTypeBucket != GetSelectedLootTypeBucket(this.selectedLootTypeFilter))
-        {
-            return false;
-        }
-
-        if (this.selectedGroupFilter != 0 && GetGroupLabel(record.WhoConfidence) != GroupFilters[this.selectedGroupFilter])
-        {
-            return false;
-        }
-
-        var category = record.ItemCategoryLabel ?? "Unknown";
-        if (!string.IsNullOrEmpty(this.selectedCategoryFilter) && !string.Equals(category, this.selectedCategoryFilter, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var zone = string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName;
-        return string.IsNullOrEmpty(this.selectedZoneFilter)
-            || string.Equals(zone, this.selectedZoneFilter, StringComparison.OrdinalIgnoreCase);
     }
 
     private bool IsBlacklisted(LootRecord record)
@@ -673,34 +970,59 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawContextMenu(LootRecord record, string scope)
     {
-        if (ImGui.BeginPopupContextItem($"##record-context-{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{record.RawText.GetHashCode()}"))
+        if (!ImGui.BeginPopupContextItem($"##record-context-{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{record.RawText.GetHashCode(StringComparison.Ordinal)}"))
         {
-            if (ImGui.MenuItem("Copy line"))
+            return;
+        }
+
+        if (ImGui.MenuItem("Copy line"))
+        {
+            ImGui.SetClipboardText(this.BuildClipboardLine(record));
+        }
+
+        ImGui.Separator();
+
+        if (record.ItemId is uint itemId)
+        {
+            var isFavorite = this.configuration.FavoriteItemIds.Contains(itemId);
+            if (ImGui.MenuItem(isFavorite ? "Unpin item" : "Pin item"))
             {
-                ImGui.SetClipboardText(this.BuildClipboardLine(record));
+                if (isFavorite)
+                {
+                    this.configuration.FavoriteItemIds.Remove(itemId);
+                }
+                else
+                {
+                    this.configuration.FavoriteItemIds.Add(itemId);
+                }
+
+                this.configuration.FavoriteItemIds = this.configuration.FavoriteItemIds
+                    .Distinct()
+                    .OrderBy(value => value)
+                    .ToList();
+                this.configuration.Save();
             }
 
-            ImGui.Separator();
-
-            if (record.ItemId is uint itemId)
+            if (ImGui.MenuItem($"Hide '{GetDisplayItemName(record)}'"))
             {
-                if (ImGui.MenuItem($"Hide '{GetDisplayItemName(record)}'"))
+                if (!this.configuration.BlacklistedItemIds.Contains(itemId))
                 {
-                    if (!this.configuration.BlacklistedItemIds.Contains(itemId))
-                    {
-                        this.configuration.BlacklistedItemIds.Add(itemId);
-                        this.configuration.Save();
-                    }
+                    this.configuration.BlacklistedItemIds.Add(itemId);
+                    this.configuration.BlacklistedItemIds = this.configuration.BlacklistedItemIds
+                        .Distinct()
+                        .OrderBy(value => value)
+                        .ToList();
+                    this.configuration.Save();
                 }
             }
-            else
-            {
-                ImGui.TextDisabled("Hide item unavailable");
-                ImGui.TextDisabled("Item ID could not be resolved.");
-            }
-
-            ImGui.EndPopup();
         }
+        else
+        {
+            ImGui.TextDisabled("Pin item unavailable");
+            ImGui.TextDisabled("Hide item unavailable");
+        }
+
+        ImGui.EndPopup();
     }
 
     private void DrawItemTooltip(LootRecord record)
@@ -738,7 +1060,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawCopyButton(LootRecord record, string scope)
     {
-        if (ImGui.SmallButton($"Copy##{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{record.RawText.GetHashCode()}"))
+        if (ImGui.SmallButton($"Copy##{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{record.RawText.GetHashCode(StringComparison.Ordinal)}"))
         {
             ImGui.SetClipboardText(this.BuildClipboardLine(record));
         }
@@ -763,20 +1085,22 @@ public sealed class MainWindow : Window, IDisposable
         }
     }
 
-    private void DrawCombo(string id, IReadOnlyList<string> options, ref int selectedIndex, float width)
+    private void DrawEnumCombo<TEnum>(string id, IReadOnlyList<TEnum> values, ref TEnum currentValue, Func<TEnum, string> labelSelector, float width, Action<TEnum> onChanged)
+        where TEnum : struct, Enum
     {
         ImGui.SetNextItemWidth(width);
-        if (!ImGui.BeginCombo(id, options[selectedIndex]))
+        if (!ImGui.BeginCombo(id, labelSelector(currentValue)))
         {
             return;
         }
 
-        for (var index = 0; index < options.Count; index++)
+        foreach (var value in values)
         {
-            var selected = index == selectedIndex;
-            if (ImGui.Selectable(options[index], selected))
+            var selected = EqualityComparer<TEnum>.Default.Equals(value, currentValue);
+            if (ImGui.Selectable(labelSelector(value), selected))
             {
-                selectedIndex = index;
+                currentValue = value;
+                onChanged(value);
             }
 
             if (selected)
@@ -819,31 +1143,15 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.EndCombo();
     }
 
-    private static bool RecordMatchesFilter(LootRecord record, string filter)
+    private static string GetRecipientFilterLabel(LootRecipientFilter filter)
     {
-        return Contains(record.ZoneName, filter)
-            || Contains(record.WhoName, filter)
-            || Contains(record.WhoDisplayName, filter)
-            || Contains(record.WhoWorldName, filter)
-            || Contains(record.ItemName, filter)
-            || Contains(GetLootTypeLabel(record.LootTypeBucket), filter)
-            || Contains(record.ItemCategoryLabel, filter)
-            || Contains(record.FilterGroupLabel, filter)
-            || Contains(record.EquipSlotCategoryLabel, filter)
-            || Contains(record.ResolvedItemName, filter)
-            || Contains(record.Quantity.ToString(), filter)
-            || Contains(FormatOptional(record.FilterGroupId), filter)
-            || Contains(FormatOptional(record.EquipSlotCategoryId), filter)
-            || Contains(FormatOptional(record.ItemUICategoryId), filter)
-            || Contains(FormatOptional(record.ItemSearchCategoryId), filter)
-            || Contains(FormatOptional(record.ItemSortCategoryId), filter)
-            || Contains(FormatOptional(record.ItemId), filter)
-            || Contains(record.RawText, filter);
-    }
-
-    private static bool Contains(string? value, string filter)
-    {
-        return !string.IsNullOrWhiteSpace(value) && value.Contains(filter, StringComparison.OrdinalIgnoreCase);
+        return filter switch
+        {
+            LootRecipientFilter.Self => "Self only",
+            LootRecipientFilter.PartyAlliance => "Party/Alliance",
+            LootRecipientFilter.Other => "Other only",
+            _ => "All recipients",
+        };
     }
 
     private static string GetGroupLabel(LootWhoConfidence confidence)
@@ -863,7 +1171,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private static string GetDisplayItemName(LootRecord record)
     {
-        return record.ResolvedItemName ?? record.ItemName ?? record.RawText;
+        return LootHistoryBrowser.GetDisplayItemName(record);
     }
 
     private static string GetLootTypeLabel(LootTypeBucket bucket)
@@ -873,16 +1181,6 @@ public sealed class MainWindow : Window, IDisposable
             LootTypeBucket.Dungeon => "Dungeon",
             LootTypeBucket.Raid => "Raid",
             _ => "Other",
-        };
-    }
-
-    private static LootTypeBucket GetSelectedLootTypeBucket(int selectedIndex)
-    {
-        return selectedIndex switch
-        {
-            1 => LootTypeBucket.Dungeon,
-            2 => LootTypeBucket.Raid,
-            _ => LootTypeBucket.Other,
         };
     }
 
@@ -921,22 +1219,17 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawOverviewCard(string title, string value, string subtitle)
     {
-        ImGui.BeginChild($"##overview-card-{title}", new Vector2(0, 78), true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
-        ImGui.TextColored(new Vector4(0.40f, 0.80f, 1.00f, 1.0f), title);
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, CardBackgroundColor);
+        ImGui.PushStyleColor(ImGuiCol.Border, PanelBorderColor);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 7f);
+        ImGui.BeginChild($"##overview-card-{title}", new Vector2(0, 82), true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        ImGui.TextColored(HeaderAccentColor, title);
         ImGui.Spacing();
         ImGui.TextUnformatted(value);
         ImGui.TextDisabled(subtitle);
         ImGui.EndChild();
-    }
-
-    private string GetLootTypeFilterDescription()
-    {
-        return this.selectedLootTypeFilter switch
-        {
-            1 => "Dungeon loot only",
-            2 => "Raid loot only",
-            _ => "All visible loot",
-        };
+        ImGui.PopStyleVar();
+        ImGui.PopStyleColor(2);
     }
 
     private float GetAvailableCellTextWidth()

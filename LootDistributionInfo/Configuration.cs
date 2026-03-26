@@ -10,7 +10,7 @@ namespace LootDistributionInfo;
 public sealed class Configuration : IPluginConfiguration
 {
     public const int DefaultMaxEntries = 500;
-    public const int CurrentVersion = 8;
+    public const int CurrentVersion = 9;
 
     [NonSerialized]
     private IDalamudPluginInterface? pluginInterface;
@@ -31,11 +31,19 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool UseCompactMainWindowByDefault { get; set; }
 
+    public LootHistoryQuickFilter DefaultQuickFilter { get; set; } = LootHistoryQuickFilter.All;
+
+    public LootHistoryGroupingMode DefaultGroupingMode { get; set; } = LootHistoryGroupingMode.Flat;
+
+    public LootHistorySortMode DefaultSortMode { get; set; } = LootHistorySortMode.NewestFirst;
+
     public LootHistoryColumnVisibility LootHistoryColumns { get; set; } = new();
 
     public ItemDetailsColumnVisibility ItemDetailsColumns { get; set; } = new();
 
     public List<uint> BlacklistedItemIds { get; set; } = [];
+
+    public List<uint> FavoriteItemIds { get; set; } = [];
 
     public List<LootRecord> StoredRecords { get; set; } = [];
 
@@ -57,8 +65,20 @@ public sealed class Configuration : IPluginConfiguration
         this.MaxEntries = Math.Clamp(this.MaxEntries, 1, 5000);
         this.StoredRecords ??= [];
         this.BlacklistedItemIds ??= [];
+        this.FavoriteItemIds ??= [];
         this.LootHistoryColumns ??= new LootHistoryColumnVisibility();
         this.ItemDetailsColumns ??= new ItemDetailsColumnVisibility();
+        this.BlacklistedItemIds = this.BlacklistedItemIds
+            .Distinct()
+            .OrderBy(value => value)
+            .ToList();
+        this.FavoriteItemIds = this.FavoriteItemIds
+            .Distinct()
+            .OrderBy(value => value)
+            .ToList();
+        this.DefaultQuickFilter = Enum.IsDefined(this.DefaultQuickFilter) ? this.DefaultQuickFilter : LootHistoryQuickFilter.All;
+        this.DefaultGroupingMode = Enum.IsDefined(this.DefaultGroupingMode) ? this.DefaultGroupingMode : LootHistoryGroupingMode.Flat;
+        this.DefaultSortMode = Enum.IsDefined(this.DefaultSortMode) ? this.DefaultSortMode : LootHistorySortMode.NewestFirst;
 
         foreach (var record in this.StoredRecords)
         {
@@ -73,6 +93,11 @@ public sealed class Configuration : IPluginConfiguration
 
     public void MigrateFromLegacyRecords()
     {
+        if (this.Version < 9 && this.ShowOnlySelfLoot && this.DefaultQuickFilter == LootHistoryQuickFilter.All)
+        {
+            this.DefaultQuickFilter = LootHistoryQuickFilter.Self;
+        }
+
 #pragma warning disable CS0618
         foreach (var record in this.StoredRecords)
         {

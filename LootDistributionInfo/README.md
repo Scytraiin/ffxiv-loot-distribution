@@ -13,7 +13,7 @@ License: GPL-3.0. The implementation is clean-room even where feature direction 
 | Plugin | `Loot Distribution Info` |
 | Command | `/lootinfo` |
 | Settings | `/lootinfo config` |
-| Goal | Capture loot messages and show `when / where / who / what` in a searchable history |
+| Goal | Capture loot messages and show `when / where / who / what` in a searchable history browser |
 | Current approach | Broad loot matching with zone capture and recipient verification |
 | Scope | Read-only observation through standard Dalamud services |
 
@@ -27,8 +27,8 @@ License: GPL-3.0. The implementation is clean-room even where feature direction 
 - Attempts to determine who got the loot, including party/alliance verification when possible.
 - Resolves item metadata such as icon, rarity, and item classification when the game data allows it.
 - Stores captured lines in memory and, by default, persists them across sessions.
-- Shows a newest-first history list in the plugin window.
-- Lets you filter the captured history and clear it when needed.
+- Shows a compact monitor view or a full grouped history browser in the plugin window.
+- Lets you filter, group, sort, pin favorites, blacklist items, and clear captured history.
 - Offers Debug Mode with a live debug log for capture and parser activity.
 
 ## What It Does Not Do
@@ -71,10 +71,14 @@ Because the matching is intentionally broad, some false positives are still poss
 ### Main Window
 
 - Run `/lootinfo` to open the plugin window.
-- The main view shows captured loot records in a newest-first list.
-- Use the filter field to narrow the list.
+- Compact mode shows a small `Who / Quantity / Loot` monitor.
+- Full mode shows:
+  - `Loot History` as a grouped and sortable browser
+  - `Item Details` as the dense metadata table
+  - `Overview` as a lightweight local summary
+- Use the toolbar to search, filter by recipient/category/zone, switch quick filters, group rows, and change sort order.
+- Expand history rows to inspect raw lines, classification, timestamps, and actions.
 - Use `Clear history` to wipe the current captured history.
-- When parsing is incomplete, the raw line remains visible so the event is still readable.
 
 ### Settings
 
@@ -85,6 +89,12 @@ Available settings:
 - `Save history between sessions`
 - `History size`
 - `Show debug tools`
+- `Show item icons`
+- `Show item tooltips`
+- `Use compact main window by default`
+- default quick filter, grouping, and sort
+- column visibility for `Loot History` and `Item Details`
+- blacklist management
 
 ---
 
@@ -115,6 +125,7 @@ Current release target:
 - tests: `LootDistributionInfo.Tests/`
 - custom repo metadata: `scyt.repo.json`
 - canonical feature reference: `Feature_detail.md`
+- architecture reference: `Architecture.md`
 
 ---
 
