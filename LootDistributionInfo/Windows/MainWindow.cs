@@ -68,6 +68,7 @@ public sealed class MainWindow : Window, IDisposable
     private readonly Action openConfigUi;
     private readonly Action openDebugUi;
     private readonly HashSet<string> expandedRowKeys = [];
+    private bool? lastAppliedCompactMode;
     private string filterText = string.Empty;
     private LootHistoryQuickFilter selectedQuickFilter;
     private LootHistoryGroupingMode selectedGroupingMode;
@@ -93,18 +94,30 @@ public sealed class MainWindow : Window, IDisposable
         this.selectedGroupingMode = configuration.DefaultGroupingMode;
         this.selectedSortMode = configuration.DefaultSortMode;
 
-        this.SizeCondition = ImGuiCond.FirstUseEver;
-        this.ApplyWindowLayout(this.configuration.UseCompactMainWindowByDefault);
+        this.ApplyWindowLayout(this.configuration.UseCompactMainWindowByDefault, ImGuiCond.FirstUseEver);
     }
 
     public void Dispose()
     {
     }
 
+    public override void OnOpen()
+    {
+        this.ApplyWindowLayout(this.configuration.UseCompactMainWindowByDefault, ImGuiCond.Always);
+    }
+
+    public override void Update()
+    {
+        var compactMode = this.configuration.UseCompactMainWindowByDefault;
+        if (this.lastAppliedCompactMode != compactMode)
+        {
+            this.ApplyWindowLayout(compactMode, ImGuiCond.Always);
+        }
+    }
+
     public override void Draw()
     {
         var compactMode = this.configuration.UseCompactMainWindowByDefault;
-        this.ApplyWindowLayout(compactMode);
 
         var nonBlacklistedRecords = this.lootCaptureService.Records
             .Where(record => !this.IsBlacklisted(record))
@@ -212,8 +225,11 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.EndTabBar();
     }
 
-    private void ApplyWindowLayout(bool compactMode)
+    private void ApplyWindowLayout(bool compactMode, ImGuiCond sizeCondition)
     {
+        this.lastAppliedCompactMode = compactMode;
+        this.SizeCondition = sizeCondition;
+
         if (compactMode)
         {
             this.Size = new Vector2(560, 340);
@@ -222,7 +238,6 @@ public sealed class MainWindow : Window, IDisposable
                 MinimumSize = new Vector2(420, 220),
                 MaximumSize = new Vector2(900, 620),
             };
-            ImGui.SetWindowSize(new Vector2(560, 340), ImGuiCond.Appearing);
         }
         else
         {
@@ -232,7 +247,6 @@ public sealed class MainWindow : Window, IDisposable
                 MinimumSize = new Vector2(920, 400),
                 MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
             };
-            ImGui.SetWindowSize(new Vector2(1180, 620), ImGuiCond.Appearing);
         }
     }
 
