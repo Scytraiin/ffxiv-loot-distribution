@@ -33,11 +33,18 @@ public static class LootMatcher
             return null;
         }
 
+        var (quantity, itemName) = LootQuantityParser.Split(lootText);
+        if (string.IsNullOrWhiteSpace(itemName))
+        {
+            return null;
+        }
+
         return new LootParseResult
         {
             RawText = trimmedText,
             SubjectText = subjectText,
-            LootText = lootText,
+            Quantity = quantity,
+            ItemName = itemName,
         };
     }
 

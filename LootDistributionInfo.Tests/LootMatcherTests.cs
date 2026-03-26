@@ -5,18 +5,19 @@ namespace LootDistributionInfo.Tests;
 public sealed class LootMatcherTests
 {
     [Theory]
-    [InlineData("You obtain 368 gil.", "You", "368 gil")]
-    [InlineData("You obtain a bottle of desert saffron.", "You", "bottle of desert saffron")]
-    [InlineData("You obtained a bottle of desert saffron.", "You", "bottle of desert saffron")]
-    [InlineData("Player Xavier obtains a loot item.", "Player Xavier", "loot item")]
-    [InlineData("Alliance Member obtained 2 sacks of nuts.", "Alliance Member", "2 sacks of nuts")]
-    public void TryMatch_AcceptsLootLikeLines(string input, string expectedSubject, string expectedItem)
+    [InlineData("You obtain 368 gil.", "You", 368, "gil")]
+    [InlineData("You obtain a bottle of desert saffron.", "You", 1, "bottle of desert saffron")]
+    [InlineData("You obtained a bottle of desert saffron.", "You", 1, "bottle of desert saffron")]
+    [InlineData("Player Xavier obtains a loot item.", "Player Xavier", 1, "loot item")]
+    [InlineData("Alliance Member obtained 2 sacks of nuts.", "Alliance Member", 2, "sacks of nuts")]
+    public void TryMatch_AcceptsLootLikeLines(string input, string expectedSubject, int expectedQuantity, string expectedItem)
     {
         var parsed = LootMatcher.TryMatch(input);
 
         Assert.NotNull(parsed);
         Assert.Equal(expectedSubject, parsed!.SubjectText);
-        Assert.Equal(expectedItem, parsed.LootText);
+        Assert.Equal(expectedQuantity, parsed.Quantity);
+        Assert.Equal(expectedItem, parsed.ItemName);
     }
 
     [Theory]
@@ -48,7 +49,8 @@ public sealed class LootMatcherTests
 
         Assert.NotNull(result);
         Assert.Equal("Other Person", result!.SubjectText);
-        Assert.Equal("reward", result.LootText);
+        Assert.Equal(1, result.Quantity);
+        Assert.Equal("reward", result.ItemName);
     }
 
     [Fact]
@@ -58,6 +60,7 @@ public sealed class LootMatcherTests
 
         Assert.NotNull(result);
         Assert.Equal("Treasure coffer", result!.SubjectText);
-        Assert.Equal("reward", result.LootText);
+        Assert.Equal(1, result.Quantity);
+        Assert.Equal("reward", result.ItemName);
     }
 }

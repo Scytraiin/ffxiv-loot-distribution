@@ -32,14 +32,14 @@ public sealed class LootOverviewSummaryTests
             new LootRecord
             {
                 CapturedAtUtc = DateTimeOffset.Parse("2026-03-22T10:00:00Z"),
-                LootText = "Unresolved Item",
+                ItemName = "Unresolved Item",
                 RawText = "You obtain Unresolved Item.",
                 ZoneName = "Unknown",
             },
             new LootRecord
             {
                 CapturedAtUtc = DateTimeOffset.Parse("2026-03-22T11:00:00Z"),
-                LootText = "Unresolved Item",
+                ItemName = "Unresolved Item",
                 RawText = "You obtain Unresolved Item.",
                 ZoneName = "Unknown",
             },
@@ -54,7 +54,8 @@ public sealed class LootOverviewSummaryTests
         return new LootRecord
         {
             CapturedAtUtc = DateTimeOffset.Parse(capturedAt),
-            LootText = lootText,
+            Quantity = 1,
+            ItemName = lootText,
             ResolvedItemName = lootText,
             RawText = $"You obtain {lootText}.",
             ItemId = itemId,

@@ -19,7 +19,7 @@ public sealed class ConfigWindow : Window, IDisposable
         this.configuration = configuration;
         this.lootCaptureService = lootCaptureService;
         this.openDebugUi = openDebugUi;
-        this.Size = new Vector2(560, 420);
+        this.Size = new Vector2(620, 560);
         this.SizeCondition = ImGuiCond.FirstUseEver;
     }
 
@@ -35,6 +35,7 @@ public sealed class ConfigWindow : Window, IDisposable
         var showItemIcons = this.configuration.ShowItemIcons;
         var showItemTooltips = this.configuration.ShowItemTooltips;
         var showOnlySelfLoot = this.configuration.ShowOnlySelfLoot;
+        var useCompactMainWindowByDefault = this.configuration.UseCompactMainWindowByDefault;
         var changed = false;
 
         if (ImGui.Checkbox("Save history between sessions", ref retainHistory))
@@ -73,13 +74,23 @@ public sealed class ConfigWindow : Window, IDisposable
             changed = true;
         }
 
-        if (changed)
+        if (ImGui.Checkbox("Use compact main window by default", ref useCompactMainWindowByDefault))
         {
-            this.lootCaptureService.ApplyConfigurationChanges();
+            this.configuration.UseCompactMainWindowByDefault = useCompactMainWindowByDefault;
+            changed = true;
         }
 
         ImGui.Spacing();
         ImGui.TextWrapped("Your loot history can stay available between sessions. Turn this off if you only want to keep the current play session.");
+        ImGui.TextWrapped("Compact mode shows only who got the loot, how much they got, and the loot name.");
+
+        ImGui.Spacing();
+        changed |= this.DrawColumnVisibilitySection();
+
+        if (changed)
+        {
+            this.lootCaptureService.ApplyConfigurationChanges();
+        }
 
         if (this.configuration.DebugModeEnabled)
         {
@@ -104,7 +115,7 @@ public sealed class ConfigWindow : Window, IDisposable
                 Label = this.lootCaptureService.Records
                     .FirstOrDefault(record => record.ItemId == itemId)?
                     .ResolvedItemName
-                    ?? this.lootCaptureService.Records.FirstOrDefault(record => record.ItemId == itemId)?.LootText
+                    ?? this.lootCaptureService.Records.FirstOrDefault(record => record.ItemId == itemId)?.ItemName
                     ?? $"Item #{itemId}",
             })
             .ToList();
@@ -128,6 +139,57 @@ public sealed class ConfigWindow : Window, IDisposable
 
                 ImGui.PopID();
             }
+        }
+    }
+
+    private bool DrawColumnVisibilitySection()
+    {
+        var changed = false;
+
+        if (ImGui.CollapsingHeader("Loot History Columns", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            changed |= DrawColumnCheckbox("Time", this.configuration.LootHistoryColumns.ShowTime, value => this.configuration.LootHistoryColumns.ShowTime = value);
+            changed |= DrawColumnCheckbox("Zone", this.configuration.LootHistoryColumns.ShowZone, value => this.configuration.LootHistoryColumns.ShowZone = value);
+            changed |= DrawColumnCheckbox("Who", this.configuration.LootHistoryColumns.ShowWho, value => this.configuration.LootHistoryColumns.ShowWho = value);
+            changed |= DrawColumnCheckbox("Group", this.configuration.LootHistoryColumns.ShowGroup, value => this.configuration.LootHistoryColumns.ShowGroup = value);
+            changed |= DrawColumnCheckbox("Quantity", this.configuration.LootHistoryColumns.ShowQuantity, value => this.configuration.LootHistoryColumns.ShowQuantity = value);
+            changed |= DrawColumnCheckbox("Icon", this.configuration.LootHistoryColumns.ShowIcon, value => this.configuration.LootHistoryColumns.ShowIcon = value);
+            changed |= DrawColumnCheckbox("Loot", this.configuration.LootHistoryColumns.ShowLoot, value => this.configuration.LootHistoryColumns.ShowLoot = value);
+            changed |= DrawColumnCheckbox("Raw Line", this.configuration.LootHistoryColumns.ShowRawLine, value => this.configuration.LootHistoryColumns.ShowRawLine = value);
+            changed |= DrawColumnCheckbox("Copy", this.configuration.LootHistoryColumns.ShowCopy, value => this.configuration.LootHistoryColumns.ShowCopy = value);
+        }
+
+        if (ImGui.CollapsingHeader("Item Details Columns", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            changed |= DrawColumnCheckbox("Time", this.configuration.ItemDetailsColumns.ShowTime, value => this.configuration.ItemDetailsColumns.ShowTime = value);
+            changed |= DrawColumnCheckbox("Zone", this.configuration.ItemDetailsColumns.ShowZone, value => this.configuration.ItemDetailsColumns.ShowZone = value);
+            changed |= DrawColumnCheckbox("Who", this.configuration.ItemDetailsColumns.ShowWho, value => this.configuration.ItemDetailsColumns.ShowWho = value);
+            changed |= DrawColumnCheckbox("Group", this.configuration.ItemDetailsColumns.ShowGroup, value => this.configuration.ItemDetailsColumns.ShowGroup = value);
+            changed |= DrawColumnCheckbox("Quantity", this.configuration.ItemDetailsColumns.ShowQuantity, value => this.configuration.ItemDetailsColumns.ShowQuantity = value);
+            changed |= DrawColumnCheckbox("Icon", this.configuration.ItemDetailsColumns.ShowIcon, value => this.configuration.ItemDetailsColumns.ShowIcon = value);
+            changed |= DrawColumnCheckbox("Loot", this.configuration.ItemDetailsColumns.ShowLoot, value => this.configuration.ItemDetailsColumns.ShowLoot = value);
+            changed |= DrawColumnCheckbox("Category", this.configuration.ItemDetailsColumns.ShowCategory, value => this.configuration.ItemDetailsColumns.ShowCategory = value);
+            changed |= DrawColumnCheckbox("Filter Group", this.configuration.ItemDetailsColumns.ShowFilterGroup, value => this.configuration.ItemDetailsColumns.ShowFilterGroup = value);
+            changed |= DrawColumnCheckbox("Equip Slot", this.configuration.ItemDetailsColumns.ShowEquipSlot, value => this.configuration.ItemDetailsColumns.ShowEquipSlot = value);
+            changed |= DrawColumnCheckbox("UI Category", this.configuration.ItemDetailsColumns.ShowUiCategory, value => this.configuration.ItemDetailsColumns.ShowUiCategory = value);
+            changed |= DrawColumnCheckbox("Search Category", this.configuration.ItemDetailsColumns.ShowSearchCategory, value => this.configuration.ItemDetailsColumns.ShowSearchCategory = value);
+            changed |= DrawColumnCheckbox("Sort Category", this.configuration.ItemDetailsColumns.ShowSortCategory, value => this.configuration.ItemDetailsColumns.ShowSortCategory = value);
+            changed |= DrawColumnCheckbox("Raw Line", this.configuration.ItemDetailsColumns.ShowRawLine, value => this.configuration.ItemDetailsColumns.ShowRawLine = value);
+            changed |= DrawColumnCheckbox("Copy", this.configuration.ItemDetailsColumns.ShowCopy, value => this.configuration.ItemDetailsColumns.ShowCopy = value);
+        }
+
+        return changed;
+
+        static bool DrawColumnCheckbox(string label, bool currentValue, Action<bool> setter)
+        {
+            var value = currentValue;
+            if (ImGui.Checkbox(label, ref value))
+            {
+                setter(value);
+                return true;
+            }
+
+            return false;
         }
     }
 }

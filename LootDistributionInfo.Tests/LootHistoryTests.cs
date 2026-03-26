@@ -56,7 +56,8 @@ public sealed class LootHistoryTests
         {
             CapturedAtUtc = DateTimeOffset.Parse(capturedAt),
             RawText = parsed.RawText,
-            LootText = parsed.LootText,
+            Quantity = parsed.Quantity,
+            ItemName = parsed.ItemName,
             Source = source,
         };
     }

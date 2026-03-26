@@ -67,7 +67,7 @@ public sealed class LootOverviewSummary
     private static string GetDisplayItemName(LootRecord record)
     {
         return record.ResolvedItemName
-            ?? record.LootText
+            ?? record.ItemName
             ?? record.RawText;
     }
 

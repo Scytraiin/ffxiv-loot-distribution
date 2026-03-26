@@ -76,31 +76,30 @@ If the name cannot be parsed confidently, the record remains visible and the raw
 - Only strong two-word name shapes are treated as text-based recipients.
 - Normal UI intentionally compresses confidence into three group labels.
 
-## Roll Tracking
+## Quantity Extraction
 
 ### What it does
 
-Tracks Need/Greed/Pass roll lines and correlates them to later loot entries for the same item.
+Splits the captured loot text into a numeric quantity and an item name for normal loot rows.
 
 ### How it appears in the UI
 
-The `Rolls` column shows all matched rolls, or `No rolls` when no matching roll session was found.
+- `Quantity` column
+- `Loot` column without the leading amount
 
 ### What data it depends on
 
-- roll chat/log lines
-- in-memory roll sessions
-- item name matching
-- time-window and zone correlation
+- parsed loot text after the obtain/obtained/obtains verb
+- simple leading-number extraction
 
 ### Fallback behavior
 
-If no roll session matches a loot event, the loot row still appears and the `Rolls` column shows `No rolls`.
+If no explicit amount is present, the plugin stores `Quantity = 1` and keeps the item name as-is.
 
 ### Limits / known gaps
 
-- Roll tracking is best-effort and depends on the observed English line formats.
-- Roll sessions are session-only and are not persisted.
+- Quantity extraction only looks for a leading integer followed by a space.
+- It does not attempt plural normalization.
 
 ## Item Classification
 
@@ -188,6 +187,7 @@ Shows a compact metadata tooltip when hovering item icons or loot names.
 Tooltip content includes:
 
 - item name
+- quantity
 - HQ marker if present
 - timestamp
 - zone
@@ -195,7 +195,6 @@ Tooltip content includes:
 - category
 - filter group
 - equip slot
-- rolls
 - raw line
 
 ### What data it depends on
@@ -249,6 +248,7 @@ Shared controls above the tabs:
 - search box
 - `Self only`
 - group filter
+- loot type filter
 - category filter
 - zone filter
 
@@ -279,9 +279,9 @@ Columns:
 - `Zone`
 - `Who`
 - `Group`
+- `Quantity`
 - `Icon`
 - `Loot`
-- `Rolls`
 - `Raw Line`
 - debug-only `Source`
 
@@ -298,6 +298,7 @@ The raw line remains visible even when parsing is incomplete.
 ### Limits / known gaps
 
 - This tab is intentionally a readable history view, not a full analytics view.
+- Column visibility is user-configurable through settings.
 
 ## Item Details Tab
 
@@ -321,6 +322,37 @@ Unresolved metadata fields remain empty while the row stays visible.
 ### Limits / known gaps
 
 - This is still a table view, not a drill-down inspector.
+- Column visibility is user-configurable through settings.
+
+## Compact Mode
+
+### What it does
+
+Provides a reduced default main-window layout for quick monitoring.
+
+### How it appears in the UI
+
+The compact main window shows only:
+
+- `Who`
+- `Quantity`
+- `Loot`
+
+It keeps a minimal search/settings/clear toolbar and hides the full tabbed layout.
+
+### What data it depends on
+
+- the same stored loot records used by the full window
+- the compact-mode default setting
+
+### Fallback behavior
+
+If no rows match the compact search, the window shows a normal no-match message instead of hiding the history.
+
+### Limits / known gaps
+
+- Compact mode is meant for quick monitoring, not detailed inspection.
+- Full filters and metadata tabs are only available in the standard main-window mode.
 
 ## Overview Tab
 

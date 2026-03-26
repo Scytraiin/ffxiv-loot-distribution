@@ -17,8 +17,6 @@ public enum LootWhoConfidence
 [Serializable]
 public sealed class LootRecord
 {
-    public const string NoRollsLabel = "No rolls";
-
     public DateTimeOffset CapturedAtUtc { get; set; }
 
     public string ZoneName { get; set; } = string.Empty;
@@ -33,7 +31,9 @@ public sealed class LootRecord
 
     public ushort? WhoHomeWorldId { get; set; }
 
-    public string? LootText { get; set; }
+    public int Quantity { get; set; } = 1;
+
+    public string? ItemName { get; set; }
 
     public LootTypeBucket LootTypeBucket { get; set; }
 
@@ -65,10 +65,6 @@ public sealed class LootRecord
 
     public string? ClassificationSource { get; set; }
 
-    public string RollsText { get; set; } = NoRollsLabel;
-
-    public List<LootRollRecord> RollEntries { get; set; } = [];
-
     public LootWhoConfidence WhoConfidence { get; set; }
 
     [Obsolete("Legacy config migration only.")]
@@ -78,6 +74,10 @@ public sealed class LootRecord
     [Obsolete("Legacy config migration only.")]
     [EditorBrowsable(EditorBrowsableState.Never)]
     public string? ItemText { get; set; }
+
+    [Obsolete("Legacy config migration only.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string? LootText { get; set; }
 
     public LootCaptureSource Source { get; set; }
 
@@ -89,13 +89,14 @@ public sealed class LootRecord
         this.WhoName = NormalizeNullable(this.WhoName);
         this.WhoDisplayName = NormalizeNullable(this.WhoDisplayName) ?? this.WhoName;
         this.WhoWorldName = NormalizeNullable(this.WhoWorldName);
-        this.LootText = NormalizeNullable(this.LootText);
+        this.Quantity = this.Quantity <= 0 ? 1 : this.Quantity;
+        this.ItemName = NormalizeNullable(this.ItemName);
+        var needsLegacyLootMigration = this.ItemName is null;
         this.ItemCategoryLabel = NormalizeNullable(this.ItemCategoryLabel);
         this.FilterGroupLabel = NormalizeNullable(this.FilterGroupLabel);
         this.EquipSlotCategoryLabel = NormalizeNullable(this.EquipSlotCategoryLabel);
         this.ResolvedItemName = NormalizeNullable(this.ResolvedItemName);
         this.ClassificationSource = NormalizeNullable(this.ClassificationSource);
-        this.RollEntries ??= [];
 
         if (this.WhoName is null && !string.IsNullOrWhiteSpace(this.PlayerName))
         {
@@ -103,26 +104,22 @@ public sealed class LootRecord
             this.WhoDisplayName ??= this.WhoName;
         }
 
-        if (this.LootText is null && !string.IsNullOrWhiteSpace(this.ItemText))
+        var legacyLootText = this.ItemName ?? NormalizeNullable(this.LootText) ?? NormalizeNullable(this.ItemText);
+        if (!string.IsNullOrWhiteSpace(legacyLootText))
         {
-            this.LootText = NormalizeNullable(this.ItemText);
+            var (quantity, itemName) = LootQuantityParser.Split(legacyLootText);
+            if (needsLegacyLootMigration)
+            {
+                this.Quantity = quantity;
+                this.ItemName = itemName;
+            }
+            else
+            {
+                this.Quantity = this.Quantity <= 0 ? quantity : this.Quantity;
+                this.ItemName ??= itemName;
+            }
         }
-
-        foreach (var rollEntry in this.RollEntries)
-        {
-            rollEntry.Normalize();
-        }
-
-        this.RollsText = this.RollEntries.Count == 0
-            ? NoRollsLabel
-            : string.Join("; ", this.RollEntries.Select(entry => entry.ToSummaryText()));
 #pragma warning restore CS0618
-    }
-
-    public void AttachRolls(IEnumerable<LootRollRecord> rollEntries)
-    {
-        this.RollEntries = [.. rollEntries];
-        this.Normalize();
     }
 
     private static string? NormalizeNullable(string? value)

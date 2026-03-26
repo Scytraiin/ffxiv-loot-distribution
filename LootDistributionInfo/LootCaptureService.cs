@@ -16,7 +16,6 @@ namespace LootDistributionInfo;
 public sealed class LootCaptureService : IDisposable
 {
     private static readonly TimeSpan DedupeWindow = TimeSpan.FromSeconds(2);
-    private static readonly TimeSpan RollCorrelationWindow = TimeSpan.FromMinutes(5);
 
     private readonly Configuration configuration;
     private readonly IChatGui chatGui;
@@ -26,7 +25,6 @@ public sealed class LootCaptureService : IDisposable
     private readonly IPartyList partyList;
     private readonly LootHistory history;
     private readonly DebugEventBuffer debugEventBuffer;
-    private readonly PendingRollTracker pendingRollTracker;
     private readonly ItemClassificationService itemClassificationService;
     private string currentZoneName;
     private LootTypeBucket currentLootTypeBucket;
@@ -48,7 +46,6 @@ public sealed class LootCaptureService : IDisposable
         this.partyList = partyList;
         this.history = new LootHistory(this.configuration.RetainHistoryBetweenSessions ? this.configuration.StoredRecords : []);
         this.debugEventBuffer = new DebugEventBuffer();
-        this.pendingRollTracker = new PendingRollTracker();
         this.itemClassificationService = new ItemClassificationService(this.dataManager);
         this.currentZoneName = this.ResolveZoneName(this.clientState.TerritoryType);
         this.currentLootTypeBucket = this.ResolveLootTypeBucket(this.clientState.TerritoryType);
@@ -128,48 +125,7 @@ public sealed class LootCaptureService : IDisposable
 
     private void ProcessIncomingText(string rawText, LootCaptureSource source, SeString? message = null, ILogMessage? logMessage = null)
     {
-        this.ExpirePendingRollSessions(DateTimeOffset.UtcNow);
-
-        if (this.TryCaptureRoll(rawText, source))
-        {
-            return;
-        }
-
         this.TryCaptureLoot(rawText, source, message, logMessage);
-    }
-
-    private bool TryCaptureRoll(string rawText, LootCaptureSource source)
-    {
-        var parsedRoll = LootRollMatcher.TryMatch(rawText);
-        if (parsedRoll is null)
-        {
-            this.Debug("Roll parser", $"Missed {source}: {rawText}");
-            return false;
-        }
-
-        parsedRoll.CapturedAtUtc = DateTimeOffset.UtcNow;
-        parsedRoll.PlayerName = this.ResolveRollPlayerName(parsedRoll.PlayerName);
-        parsedRoll.Normalize();
-
-        var result = this.pendingRollTracker.AddRoll(parsedRoll, this.currentZoneName, RollCorrelationWindow, DedupeWindow);
-        switch (result)
-        {
-            case PendingRollAddResult.Duplicate:
-                this.Debug("Roll dedupe", $"Skipped duplicate roll from {source}: {parsedRoll.RawText}");
-                break;
-
-            case PendingRollAddResult.CreatedSession:
-                this.Debug("Roll session", $"Created session for {parsedRoll.ItemName} in {this.currentZoneName}.");
-                this.Debug("Roll parser", $"Matched {source}: {parsedRoll.ToSummaryText()} on {parsedRoll.ItemName}.");
-                break;
-
-            case PendingRollAddResult.AddedToExistingSession:
-                this.Debug("Roll session", $"Added roll to session for {parsedRoll.ItemName}: {parsedRoll.ToSummaryText()}.");
-                this.Debug("Roll parser", $"Matched {source}: {parsedRoll.ToSummaryText()} on {parsedRoll.ItemName}.");
-                break;
-        }
-
-        return true;
     }
 
     private void TryCaptureLoot(string rawText, LootCaptureSource source, SeString? message, ILogMessage? logMessage)
@@ -182,18 +138,7 @@ public sealed class LootCaptureService : IDisposable
         }
 
         var matchedRecord = this.BuildRecord(parsedLoot, source, message, logMessage);
-        this.Debug("Matcher", $"Matched {source}: who={matchedRecord.WhoDisplayName ?? matchedRecord.WhoName ?? "<unknown>"} ({matchedRecord.WhoConfidence}), loot={matchedRecord.LootText ?? "<unknown>"}, type={matchedRecord.LootTypeBucket}.");
-
-        var matchedRollSession = this.pendingRollTracker.TryResolve(matchedRecord.LootText ?? matchedRecord.RawText, matchedRecord.ZoneName, matchedRecord.CapturedAtUtc, RollCorrelationWindow);
-        if (matchedRollSession is not null)
-        {
-            matchedRecord.AttachRolls(matchedRollSession.Entries);
-            this.Debug("Roll correlate", $"Attached {matchedRollSession.Entries.Count} roll(s) to {matchedRecord.LootText ?? matchedRecord.RawText}.");
-        }
-        else
-        {
-            this.Debug("Roll correlate", $"No rolls matched for {matchedRecord.LootText ?? matchedRecord.RawText}.");
-        }
+        this.Debug("Matcher", $"Matched {source}: who={matchedRecord.WhoDisplayName ?? matchedRecord.WhoName ?? "<unknown>"} ({matchedRecord.WhoConfidence}), quantity={matchedRecord.Quantity}, item={matchedRecord.ItemName ?? "<unknown>"}, type={matchedRecord.LootTypeBucket}.");
 
         // Dedupe keeps the shared chat/log pipeline from storing the same loot line twice when both
         // hooks observe the same event within a small timing window.
@@ -265,7 +210,7 @@ public sealed class LootCaptureService : IDisposable
             this.GetLocalPlayerName(),
             this.GetLocalHomeWorldId());
         var itemPayload = this.TryExtractItemPayload(message);
-        var itemClassification = this.itemClassificationService.Classify(parsedLoot.LootText, itemPayload?.ItemId);
+        var itemClassification = this.itemClassificationService.Classify(parsedLoot.ItemName, itemPayload?.ItemId);
 
         var record = new LootRecord
         {
@@ -276,12 +221,13 @@ public sealed class LootCaptureService : IDisposable
             WhoDisplayName = resolvedRecipient.WhoDisplayName,
             WhoWorldName = resolvedRecipient.WhoWorldName,
             WhoHomeWorldId = resolvedRecipient.WhoHomeWorldId,
-            LootText = parsedLoot.LootText,
+            Quantity = parsedLoot.Quantity,
+            ItemName = parsedLoot.ItemName,
             LootTypeBucket = this.currentLootTypeBucket,
             ItemId = itemClassification.ItemId ?? itemPayload?.ItemId,
             IconId = itemClassification.IconId,
             Rarity = itemClassification.Rarity,
-            IsHighQuality = itemPayload?.IsHighQuality ?? ContainsHighQualityMarker(parsedLoot.RawText, parsedLoot.LootText),
+            IsHighQuality = itemPayload?.IsHighQuality ?? ContainsHighQualityMarker(parsedLoot.RawText, parsedLoot.ItemName),
             ItemCategoryLabel = itemClassification.ItemCategoryLabel,
             FilterGroupId = itemClassification.FilterGroupId,
             FilterGroupLabel = itemClassification.FilterGroupLabel,
@@ -298,13 +244,6 @@ public sealed class LootCaptureService : IDisposable
 
         record.Normalize();
         return record;
-    }
-
-    private string ResolveRollPlayerName(string playerName)
-    {
-        return string.Equals(playerName, "You", StringComparison.OrdinalIgnoreCase)
-            ? this.GetLocalPlayerName() ?? "You"
-            : playerName.Trim();
     }
 
     private IReadOnlyList<LootPartyMemberIdentity> GetPartyAndAllianceMembers()
@@ -446,14 +385,6 @@ public sealed class LootCaptureService : IDisposable
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private void ExpirePendingRollSessions(DateTimeOffset now)
-    {
-        foreach (var expiredSession in this.pendingRollTracker.Expire(now, RollCorrelationWindow))
-        {
-            this.Debug("Roll expire", $"Expired unresolved rolls for {expiredSession.NormalizedItemName} in {expiredSession.ZoneName}.");
-        }
     }
 
     private sealed record ItemPayloadMatch(uint ItemId, bool IsHighQuality, string? DisplayName);
