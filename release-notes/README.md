@@ -11,3 +11,4 @@
 - [v1.0.0-alpha](./v1.0.0-alpha.md)
 - [v1.0.1-alpha](./v1.0.1-alpha.md)
 - [v1.0.2-alpha](./v1.0.2-alpha.md)
+- [v1.0.3-alpha](./v1.0.3-alpha.md)

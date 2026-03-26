@@ -114,7 +114,7 @@ Current state:
 Current release target:
 
 - repo: `https://github.com/Scytraiin/ffxiv-loot-distribution`
-- tag: `v1.0.2-alpha`
+- tag: `v1.0.3-alpha`
 - asset: `latest.zip`
 
 ---
