@@ -24,6 +24,11 @@ public sealed class LootHistory
         this.records.Clear();
     }
 
+    public int RemoveWhere(Predicate<LootRecord> predicate)
+    {
+        return this.records.RemoveAll(predicate);
+    }
+
     public bool TryAdd(LootRecord record, int maxEntries, TimeSpan dedupeWindow)
     {
         if (this.IsDuplicate(record, dedupeWindow))

@@ -252,6 +252,7 @@ Shared controls above the tabs:
 - recipient filter
 - category filter
 - zone filter
+- hidden categories applied from settings by default
 - clear history, settings, and debug-log actions
 
 ### What data it depends on
@@ -294,6 +295,7 @@ Grouping options:
 - `By Zone`
 - `By Item`
 - `By Recipient`
+- `By Day`
 
 ### What data it depends on
 
@@ -352,6 +354,8 @@ The compact main window shows only:
 - `Loot`
 
 It keeps a minimal search/settings/clear toolbar and hides the full tabbed layout.
+
+Each compact row also keeps a direct `Copy` action for quick clipboard use without leaving the reduced layout.
 
 ### What data it depends on
 
@@ -434,6 +438,7 @@ Settings include:
 
 - `Save history between sessions`
 - `History size`
+- maximum history size of `5000`
 - `Show debug tools`
 - `Show item icons`
 - `Show item tooltips`
@@ -441,6 +446,7 @@ Settings include:
 - `Default quick filter`
 - `Default grouping`
 - `Default sort`
+- hidden categories by default
 - blacklist management
 - favorite item persistence
 

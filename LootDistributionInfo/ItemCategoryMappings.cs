@@ -1,9 +1,28 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace LootDistributionInfo;
 
 public static class ItemCategoryMappings
 {
+    private static readonly IReadOnlyList<string> EquipSlotLabels =
+    [
+        "Main Hand",
+        "Off Hand",
+        "Shield",
+        "Soul Crystal",
+        "Head Equipment",
+        "Body Equipment",
+        "Hands Equipment",
+        "Legs Equipment",
+        "Feet Equipment",
+        "Earrings",
+        "Necklace",
+        "Bracelets",
+        "Ring",
+    ];
+
     private static readonly IReadOnlyDictionary<byte, string> FilterGroupLabels = new Dictionary<byte, string>
     {
         [1] = "Physical Weapon",
@@ -65,6 +84,13 @@ public static class ItemCategoryMappings
         [57] = "Occult Crescent Sanguine Cipher",
     };
 
+    private static readonly IReadOnlyList<string> KnownPrimaryCategoryLabels = FilterGroupLabels.Values
+        .Concat(EquipSlotLabels)
+        .Append("Unknown")
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
     public static string? GetFilterGroupLabel(byte filterGroup)
     {
         return FilterGroupLabels.TryGetValue(filterGroup, out var label)
@@ -90,5 +116,10 @@ public static class ItemCategoryMappings
         }
 
         return "Unknown";
+    }
+
+    public static IReadOnlyList<string> GetKnownPrimaryCategoryLabels()
+    {
+        return KnownPrimaryCategoryLabels;
     }
 }

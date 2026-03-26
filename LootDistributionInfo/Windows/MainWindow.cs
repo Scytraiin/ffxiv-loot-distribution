@@ -12,6 +12,13 @@ namespace LootDistributionInfo.Windows;
 
 public sealed class MainWindow : Window, IDisposable
 {
+    private enum HistoryClearScope
+    {
+        Everything = 0,
+        Zone = 1,
+        Character = 2,
+    }
+
     private static readonly LootHistoryQuickFilter[] QuickFilters =
     [
         LootHistoryQuickFilter.All,
@@ -27,6 +34,7 @@ public sealed class MainWindow : Window, IDisposable
         LootHistoryGroupingMode.ByZone,
         LootHistoryGroupingMode.ByItem,
         LootHistoryGroupingMode.ByRecipient,
+        LootHistoryGroupingMode.ByDay,
     ];
 
     private static readonly LootHistorySortMode[] SortModes =
@@ -76,6 +84,9 @@ public sealed class MainWindow : Window, IDisposable
     private LootRecipientFilter selectedRecipientFilter;
     private string selectedCategoryFilter = string.Empty;
     private string selectedZoneFilter = string.Empty;
+    private HistoryClearScope clearScope = HistoryClearScope.Everything;
+    private string clearSelectedZone = string.Empty;
+    private string clearSelectedRecipient = string.Empty;
 
     public MainWindow(
         LootCaptureService lootCaptureService,
@@ -118,18 +129,22 @@ public sealed class MainWindow : Window, IDisposable
     public override void Draw()
     {
         var compactMode = this.configuration.UseCompactMainWindowByDefault;
+        var allRecords = this.lootCaptureService.Records.ToList();
 
-        var nonBlacklistedRecords = this.lootCaptureService.Records
+        var nonBlacklistedRecords = allRecords
             .Where(record => !this.IsBlacklisted(record))
             .ToList();
 
         if (compactMode)
         {
             this.DrawCompactView(nonBlacklistedRecords);
-            return;
+        }
+        else
+        {
+            this.DrawFullView(nonBlacklistedRecords);
         }
 
-        this.DrawFullView(nonBlacklistedRecords);
+        this.DrawClearHistoryModal(allRecords);
     }
 
     private void DrawCompactView(IReadOnlyList<LootRecord> nonBlacklistedRecords)
@@ -152,6 +167,7 @@ public sealed class MainWindow : Window, IDisposable
                 LootRecipientFilter.All,
                 string.Empty,
                 string.Empty,
+                this.configuration.HiddenCategoryLabels,
                 this.configuration.FavoriteItemIds));
 
         if (visibleRecords.Count == 0)
@@ -259,6 +275,7 @@ public sealed class MainWindow : Window, IDisposable
             this.selectedRecipientFilter,
             this.selectedCategoryFilter,
             this.selectedZoneFilter,
+            this.configuration.HiddenCategoryLabels,
             this.configuration.FavoriteItemIds);
     }
 
@@ -277,7 +294,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SameLine();
         if (ImGui.Button("Clear"))
         {
-            this.lootCaptureService.ClearHistory();
+            this.OpenClearHistoryModal();
         }
 
         ImGui.SameLine();
@@ -353,8 +370,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SameLine();
         if (ImGui.Button("Clear history"))
         {
-            this.lootCaptureService.ClearHistory();
-            this.expandedRowKeys.Clear();
+            this.OpenClearHistoryModal();
         }
 
         ImGui.SameLine();
@@ -649,7 +665,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawCompactTable(IReadOnlyList<LootRecord> records)
     {
-        if (!ImGui.BeginTable("##compact-loot-history", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.ScrollX, new Vector2(-1, -1)))
+        if (!ImGui.BeginTable("##compact-loot-history", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.ScrollX, new Vector2(-1, -1)))
         {
             return;
         }
@@ -657,6 +673,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.TableSetupColumn("Who", ImGuiTableColumnFlags.WidthFixed, 170f);
         ImGui.TableSetupColumn("Qty", ImGuiTableColumnFlags.WidthFixed, 70f);
         ImGui.TableSetupColumn("Loot", ImGuiTableColumnFlags.WidthStretch, 220f);
+        ImGui.TableSetupColumn("Copy", ImGuiTableColumnFlags.WidthFixed, 64f);
         ImGui.TableHeadersRow();
 
         foreach (var record in records)
@@ -671,6 +688,9 @@ public sealed class MainWindow : Window, IDisposable
 
             ImGui.TableSetColumnIndex(2);
             this.DrawLootCell(record, "compact-loot");
+
+            ImGui.TableSetColumnIndex(3);
+            this.DrawCopyButton(record, "compact");
         }
 
         ImGui.EndTable();
@@ -1078,6 +1098,131 @@ public sealed class MainWindow : Window, IDisposable
         {
             ImGui.SetClipboardText(this.BuildClipboardLine(record));
         }
+    }
+
+    private void OpenClearHistoryModal()
+    {
+        this.clearScope = HistoryClearScope.Everything;
+        this.clearSelectedZone = string.Empty;
+        this.clearSelectedRecipient = string.Empty;
+        ImGui.OpenPopup("Clear history##modal");
+    }
+
+    private void DrawClearHistoryModal(IReadOnlyList<LootRecord> allRecords)
+    {
+        var zoneOptions = allRecords
+            .Select(record => string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var recipientOptions = allRecords
+            .Select(GetWhoLabel)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (this.clearScope == HistoryClearScope.Zone && zoneOptions.Count > 0 && !zoneOptions.Contains(this.clearSelectedZone, StringComparer.OrdinalIgnoreCase))
+        {
+            this.clearSelectedZone = zoneOptions[0];
+        }
+
+        if (this.clearScope == HistoryClearScope.Character && recipientOptions.Count > 0 && !recipientOptions.Contains(this.clearSelectedRecipient, StringComparer.OrdinalIgnoreCase))
+        {
+            this.clearSelectedRecipient = recipientOptions[0];
+        }
+
+        if (!ImGui.BeginPopupModal("Clear history##modal", ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            return;
+        }
+
+        ImGui.TextWrapped("Choose which stored history entries should be removed.");
+        ImGui.Spacing();
+
+        if (ImGui.RadioButton("Everything", this.clearScope == HistoryClearScope.Everything))
+        {
+            this.clearScope = HistoryClearScope.Everything;
+        }
+
+        if (ImGui.RadioButton("Specific zone", this.clearScope == HistoryClearScope.Zone))
+        {
+            this.clearScope = HistoryClearScope.Zone;
+            this.clearSelectedZone = zoneOptions.FirstOrDefault() ?? string.Empty;
+        }
+
+        if (ImGui.RadioButton("Specific character", this.clearScope == HistoryClearScope.Character))
+        {
+            this.clearScope = HistoryClearScope.Character;
+            this.clearSelectedRecipient = recipientOptions.FirstOrDefault() ?? string.Empty;
+        }
+
+        ImGui.Spacing();
+
+        if (this.clearScope == HistoryClearScope.Zone)
+        {
+            this.DrawStringFilterCombo("##clear-zone", "Select zone", zoneOptions, ref this.clearSelectedZone, 260f);
+        }
+        else if (this.clearScope == HistoryClearScope.Character)
+        {
+            this.DrawStringFilterCombo("##clear-recipient", "Select character", recipientOptions, ref this.clearSelectedRecipient, 260f);
+        }
+
+        var selectedCount = this.GetSelectedClearCount(allRecords);
+        ImGui.TextDisabled($"{selectedCount} entr{(selectedCount == 1 ? "y" : "ies")} selected.");
+
+        var canClear = selectedCount > 0;
+        if (!canClear)
+        {
+            ImGui.BeginDisabled();
+        }
+
+        if (ImGui.Button("Clear selected"))
+        {
+            switch (this.clearScope)
+            {
+                case HistoryClearScope.Zone:
+                    this.lootCaptureService.ClearHistoryForZone(this.clearSelectedZone);
+                    break;
+                case HistoryClearScope.Character:
+                    this.lootCaptureService.ClearHistoryForRecipient(this.clearSelectedRecipient);
+                    break;
+                default:
+                    this.lootCaptureService.ClearHistory();
+                    break;
+            }
+
+            this.expandedRowKeys.Clear();
+            ImGui.CloseCurrentPopup();
+        }
+
+        if (!canClear)
+        {
+            ImGui.EndDisabled();
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel"))
+        {
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private int GetSelectedClearCount(IReadOnlyList<LootRecord> allRecords)
+    {
+        return this.clearScope switch
+        {
+            HistoryClearScope.Zone => allRecords.Count(record => string.Equals(
+                string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName,
+                this.clearSelectedZone,
+                StringComparison.OrdinalIgnoreCase)),
+            HistoryClearScope.Character => allRecords.Count(record => string.Equals(
+                GetWhoLabel(record),
+                this.clearSelectedRecipient,
+                StringComparison.OrdinalIgnoreCase)),
+            _ => allRecords.Count,
+        };
     }
 
     private static int GetRecordScopeHash(LootRecord record)

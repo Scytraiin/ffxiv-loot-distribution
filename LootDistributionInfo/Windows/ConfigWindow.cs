@@ -25,6 +25,7 @@ public sealed class ConfigWindow : Window, IDisposable
         LootHistoryGroupingMode.ByZone,
         LootHistoryGroupingMode.ByItem,
         LootHistoryGroupingMode.ByRecipient,
+        LootHistoryGroupingMode.ByDay,
     ];
 
     private static readonly LootHistorySortMode[] SortModes =
@@ -123,8 +124,13 @@ public sealed class ConfigWindow : Window, IDisposable
 
         ImGui.Spacing();
         ImGui.TextWrapped("Your loot history can stay available between sessions. Turn this off if you only want to keep the current play session.");
+        ImGui.TextWrapped("History size can be set from 1 up to 5000 stored entries.");
         ImGui.TextWrapped("Compact mode shows only who got the loot, how much they got, and the loot name.");
+        ImGui.TextWrapped("Hidden categories are excluded from the main views until you explicitly re-enable them here.");
         ImGui.TextDisabled($"Favorite items saved: {this.configuration.FavoriteItemIds.Count}");
+
+        ImGui.Spacing();
+        changed |= this.DrawHiddenCategoriesSection();
 
         ImGui.Spacing();
         changed |= this.DrawColumnVisibilitySection();
@@ -260,5 +266,57 @@ public sealed class ConfigWindow : Window, IDisposable
 
             return false;
         }
+    }
+
+    private bool DrawHiddenCategoriesSection()
+    {
+        if (!ImGui.CollapsingHeader("Hidden Categories By Default", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            return false;
+        }
+
+        ImGui.TextWrapped("Hide broad item categories from the main history views by default. Examples include Currency, Materia, or any other category you do not want to browse every day.");
+        var changed = false;
+
+        foreach (var category in this.BuildCategoryOptions())
+        {
+            var hidden = this.configuration.HiddenCategoryLabels.Contains(category, StringComparer.OrdinalIgnoreCase);
+            if (!ImGui.Checkbox(category, ref hidden))
+            {
+                continue;
+            }
+
+            this.SetCategoryHidden(category, hidden);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private IReadOnlyList<string> BuildCategoryOptions()
+    {
+        return ItemCategoryMappings.GetKnownPrimaryCategoryLabels()
+            .Concat(this.lootCaptureService.Records.Select(record => record.ItemCategoryLabel ?? "Unknown"))
+            .Concat(this.configuration.HiddenCategoryLabels)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(label => label, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private void SetCategoryHidden(string category, bool hidden)
+    {
+        this.configuration.HiddenCategoryLabels = this.configuration.HiddenCategoryLabels
+            .Where(existing => !string.Equals(existing, category, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (hidden)
+        {
+            this.configuration.HiddenCategoryLabels.Add(category);
+        }
+
+        this.configuration.HiddenCategoryLabels = this.configuration.HiddenCategoryLabels
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(label => label, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 }

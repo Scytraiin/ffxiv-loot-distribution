@@ -10,7 +10,7 @@ namespace LootDistributionInfo;
 public sealed class Configuration : IPluginConfiguration
 {
     public const int DefaultMaxEntries = 500;
-    public const int CurrentVersion = 9;
+    public const int CurrentVersion = 10;
 
     [NonSerialized]
     private IDalamudPluginInterface? pluginInterface;
@@ -41,6 +41,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public ItemDetailsColumnVisibility ItemDetailsColumns { get; set; } = new();
 
+    public List<string> HiddenCategoryLabels { get; set; } = [];
+
     public List<uint> BlacklistedItemIds { get; set; } = [];
 
     public List<uint> FavoriteItemIds { get; set; } = [];
@@ -64,10 +66,18 @@ public sealed class Configuration : IPluginConfiguration
         this.Version = CurrentVersion;
         this.MaxEntries = Math.Clamp(this.MaxEntries, 1, 5000);
         this.StoredRecords ??= [];
+        this.HiddenCategoryLabels ??= [];
         this.BlacklistedItemIds ??= [];
         this.FavoriteItemIds ??= [];
         this.LootHistoryColumns ??= new LootHistoryColumnVisibility();
         this.ItemDetailsColumns ??= new ItemDetailsColumnVisibility();
+        this.HiddenCategoryLabels = this.HiddenCategoryLabels
+            .Select(NormalizeNullable)
+            .Where(value => value is not null)
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         this.BlacklistedItemIds = this.BlacklistedItemIds
             .Distinct()
             .OrderBy(value => value)

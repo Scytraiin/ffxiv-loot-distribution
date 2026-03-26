@@ -97,6 +97,52 @@ public sealed class LootCaptureService : IDisposable
         this.Debug("History", "Loot history cleared.");
     }
 
+    public int ClearHistoryForZone(string zoneName)
+    {
+        if (string.IsNullOrWhiteSpace(zoneName))
+        {
+            return 0;
+        }
+
+        var removedCount = this.history.RemoveWhere(record => string.Equals(
+            string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown" : record.ZoneName,
+            zoneName,
+            StringComparison.OrdinalIgnoreCase));
+
+        if (removedCount > 0)
+        {
+            this.PersistHistory();
+        }
+
+        this.Debug("History", removedCount > 0
+            ? $"Cleared {removedCount} entr{(removedCount == 1 ? "y" : "ies")} for zone '{zoneName}'."
+            : $"No history entries matched zone '{zoneName}'.");
+        return removedCount;
+    }
+
+    public int ClearHistoryForRecipient(string recipientLabel)
+    {
+        if (string.IsNullOrWhiteSpace(recipientLabel))
+        {
+            return 0;
+        }
+
+        var removedCount = this.history.RemoveWhere(record => string.Equals(
+            GetRecipientLabel(record),
+            recipientLabel,
+            StringComparison.OrdinalIgnoreCase));
+
+        if (removedCount > 0)
+        {
+            this.PersistHistory();
+        }
+
+        this.Debug("History", removedCount > 0
+            ? $"Cleared {removedCount} entr{(removedCount == 1 ? "y" : "ies")} for recipient '{recipientLabel}'."
+            : $"No history entries matched recipient '{recipientLabel}'.");
+        return removedCount;
+    }
+
     public void ClearDebugEvents()
     {
         this.debugEventBuffer.Clear();
@@ -334,6 +380,11 @@ public sealed class LootCaptureService : IDisposable
     {
         var flattened = SeStringDisplayText.Flatten(message);
         return string.IsNullOrWhiteSpace(flattened) ? message.TextValue.Trim() : flattened;
+    }
+
+    private static string GetRecipientLabel(LootRecord record)
+    {
+        return record.WhoDisplayName ?? record.WhoName ?? "Unknown";
     }
 
     private LootTypeBucket ResolveLootTypeBucket(ushort territoryType)

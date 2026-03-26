@@ -21,6 +21,7 @@ public enum LootHistoryGroupingMode
     ByZone = 1,
     ByItem = 2,
     ByRecipient = 3,
+    ByDay = 4,
 }
 
 [Serializable]
@@ -48,6 +49,7 @@ public sealed record LootHistoryBrowseOptions(
     LootRecipientFilter RecipientFilter,
     string SelectedCategory,
     string SelectedZone,
+    IReadOnlyCollection<string> HiddenCategoryLabels,
     IReadOnlyCollection<uint> FavoriteItemIds);
 
 public sealed record LootHistoryGroup(string Label, IReadOnlyList<LootRecord> Records);
@@ -60,6 +62,7 @@ public static class LootHistoryBrowser
             .Where(record => MatchesSearch(record, options.SearchText))
             .Where(record => MatchesQuickFilter(record, options.QuickFilter, options.FavoriteItemIds))
             .Where(record => MatchesRecipientFilter(record, options.RecipientFilter))
+            .Where(record => MatchesHiddenCategories(record, options.SelectedCategory, options.HiddenCategoryLabels))
             .Where(record => MatchesCategory(record, options.SelectedCategory))
             .Where(record => MatchesZone(record, options.SelectedZone));
 
@@ -128,6 +131,7 @@ public static class LootHistoryBrowser
             LootHistoryGroupingMode.ByZone => "By Zone",
             LootHistoryGroupingMode.ByItem => "By Item",
             LootHistoryGroupingMode.ByRecipient => "By Recipient",
+            LootHistoryGroupingMode.ByDay => "By Day",
             _ => "Flat",
         };
     }
@@ -151,6 +155,7 @@ public static class LootHistoryBrowser
             LootHistoryGroupingMode.ByZone => string.IsNullOrWhiteSpace(record.ZoneName) ? "Unknown Zone" : record.ZoneName,
             LootHistoryGroupingMode.ByItem => GetDisplayItemName(record),
             LootHistoryGroupingMode.ByRecipient => GetRecipientLabel(record),
+            LootHistoryGroupingMode.ByDay => record.CapturedAtUtc.ToLocalTime().ToString("MMM-dd-yyyy"),
             _ => "History",
         };
     }
@@ -206,6 +211,22 @@ public static class LootHistoryBrowser
         }
 
         return string.Equals(record.ItemCategoryLabel ?? "Unknown", selectedCategory, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool MatchesHiddenCategories(LootRecord record, string selectedCategory, IReadOnlyCollection<string> hiddenCategoryLabels)
+    {
+        if (hiddenCategoryLabels.Count == 0)
+        {
+            return true;
+        }
+
+        var categoryLabel = record.ItemCategoryLabel ?? "Unknown";
+        if (!string.IsNullOrWhiteSpace(selectedCategory) && string.Equals(categoryLabel, selectedCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !hiddenCategoryLabels.Any(hiddenLabel => string.Equals(hiddenLabel, categoryLabel, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool MatchesZone(LootRecord record, string selectedZone)
