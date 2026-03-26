@@ -14,6 +14,7 @@ public sealed class Plugin : IDalamudPlugin
     private const string CommandName = "/lootinfo";
 
     private readonly IDalamudPluginInterface pluginInterface;
+    private readonly IPluginLog log;
     private readonly ICommandManager commandManager;
     private readonly WindowSystem windowSystem = new("LootDistributionInfo");
     private readonly MainWindow mainWindow;
@@ -34,6 +35,7 @@ public sealed class Plugin : IDalamudPlugin
         IPluginLog log)
     {
         this.pluginInterface = pluginInterface;
+        this.log = log;
         this.commandManager = commandManager;
 
         this.configuration = this.pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
@@ -89,7 +91,17 @@ public sealed class Plugin : IDalamudPlugin
 
     private void DrawUi()
     {
-        this.windowSystem.Draw();
+        try
+        {
+            this.windowSystem.Draw();
+        }
+        catch (Exception ex)
+        {
+            this.mainWindow.IsOpen = false;
+            this.configWindow.IsOpen = false;
+            this.debugWindow.IsOpen = false;
+            this.log.Error(ex, "Unhandled UI exception in Loot Distribution Info. Closed plugin windows to protect the host.");
+        }
     }
 
     private void OpenMainUi()

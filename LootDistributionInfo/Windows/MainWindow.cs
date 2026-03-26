@@ -625,7 +625,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private string GetRecordKey(LootRecord record)
     {
-        return $"{record.CapturedAtUtc.ToUnixTimeMilliseconds()}::{record.RawText.GetHashCode(StringComparison.Ordinal)}::{record.Source}";
+        return $"{record.CapturedAtUtc.ToUnixTimeMilliseconds()}::{GetRecordScopeHash(record)}::{record.Source}";
     }
 
     private bool IsFavorite(LootRecord record)
@@ -970,7 +970,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawContextMenu(LootRecord record, string scope)
     {
-        if (!ImGui.BeginPopupContextItem($"##record-context-{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{record.RawText.GetHashCode(StringComparison.Ordinal)}"))
+        if (!ImGui.BeginPopupContextItem($"##record-context-{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{GetRecordScopeHash(record)}"))
         {
             return;
         }
@@ -1060,10 +1060,15 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawCopyButton(LootRecord record, string scope)
     {
-        if (ImGui.SmallButton($"Copy##{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{record.RawText.GetHashCode(StringComparison.Ordinal)}"))
+        if (ImGui.SmallButton($"Copy##{scope}-{record.CapturedAtUtc.ToUnixTimeMilliseconds()}-{GetRecordScopeHash(record)}"))
         {
             ImGui.SetClipboardText(this.BuildClipboardLine(record));
         }
+    }
+
+    private static int GetRecordScopeHash(LootRecord record)
+    {
+        return HashCode.Combine(record.CapturedAtUtc, record.RawText, record.Source);
     }
 
     private void DrawInlineIcon(LootRecord record, float size)
