@@ -127,7 +127,7 @@ public sealed class ConfigWindow : Window, IDisposable
         ImGui.TextWrapped("History size can be set from 1 up to 5000 stored entries.");
         ImGui.TextWrapped("Compact mode shows only who got the loot, how much they got, and the loot name.");
         ImGui.TextWrapped("Hidden categories are excluded from the main views until you explicitly re-enable them here.");
-        ImGui.TextDisabled($"Favorite items saved: {this.configuration.FavoriteItemIds.Count}");
+        ImGui.TextDisabled($"Favorite items saved: {this.configuration.FavoriteItemKeys.Count}");
 
         ImGui.Spacing();
         changed |= this.DrawHiddenCategoriesSection();
@@ -154,17 +154,16 @@ public sealed class ConfigWindow : Window, IDisposable
         ImGui.Spacing();
         ImGui.TextUnformatted("Blacklisted items");
 
-        var blacklistedItems = this.configuration.BlacklistedItemIds
-            .Distinct()
-            .OrderBy(itemId => itemId)
-            .Select(itemId => new
+        var blacklistedItems = this.configuration.BlacklistedItemKeys
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(itemKey => itemKey, StringComparer.Ordinal)
+            .Select(itemKey => new
             {
-                ItemId = itemId,
+                ItemKey = itemKey,
                 Label = this.lootCaptureService.Records
-                    .FirstOrDefault(record => record.ItemId == itemId)?
-                    .ResolvedItemName
-                    ?? this.lootCaptureService.Records.FirstOrDefault(record => record.ItemId == itemId)?.ItemName
-                    ?? $"Item #{itemId}",
+                    .FirstOrDefault(record => string.Equals(LootItemKey.Build(record), itemKey, StringComparison.Ordinal)) is { } record
+                        ? record.ResolvedItemName ?? record.ItemName ?? record.RawText
+                        : LootItemKey.GetDisplayLabel(itemKey, null),
             })
             .ToList();
 
@@ -176,12 +175,14 @@ public sealed class ConfigWindow : Window, IDisposable
         {
             foreach (var item in blacklistedItems)
             {
-                ImGui.PushID((int)item.ItemId);
-                ImGui.TextUnformatted($"{item.Label} ({item.ItemId})");
+                ImGui.PushID(item.ItemKey);
+                ImGui.TextUnformatted(item.Label);
+                ImGui.SameLine();
+                ImGui.TextDisabled(item.ItemKey);
                 ImGui.SameLine();
                 if (ImGui.Button("Remove"))
                 {
-                    this.configuration.BlacklistedItemIds.Remove(item.ItemId);
+                    this.configuration.BlacklistedItemKeys.RemoveAll(value => string.Equals(value, item.ItemKey, StringComparison.Ordinal));
                     this.configuration.Save();
                 }
 

@@ -10,7 +10,7 @@ namespace LootDistributionInfo;
 public sealed class Configuration : IPluginConfiguration
 {
     public const int DefaultMaxEntries = 500;
-    public const int CurrentVersion = 10;
+    public const int CurrentVersion = 11;
 
     [NonSerialized]
     private IDalamudPluginInterface? pluginInterface;
@@ -47,6 +47,10 @@ public sealed class Configuration : IPluginConfiguration
 
     public List<uint> FavoriteItemIds { get; set; } = [];
 
+    public List<string> BlacklistedItemKeys { get; set; } = [];
+
+    public List<string> FavoriteItemKeys { get; set; } = [];
+
     public List<LootRecord> StoredRecords { get; set; } = [];
 
     public void Initialize(IDalamudPluginInterface pluginInterface)
@@ -69,6 +73,8 @@ public sealed class Configuration : IPluginConfiguration
         this.HiddenCategoryLabels ??= [];
         this.BlacklistedItemIds ??= [];
         this.FavoriteItemIds ??= [];
+        this.BlacklistedItemKeys ??= [];
+        this.FavoriteItemKeys ??= [];
         this.LootHistoryColumns ??= new LootHistoryColumnVisibility();
         this.ItemDetailsColumns ??= new ItemDetailsColumnVisibility();
         this.HiddenCategoryLabels = this.HiddenCategoryLabels
@@ -85,6 +91,20 @@ public sealed class Configuration : IPluginConfiguration
         this.FavoriteItemIds = this.FavoriteItemIds
             .Distinct()
             .OrderBy(value => value)
+            .ToList();
+        this.BlacklistedItemKeys = this.BlacklistedItemKeys
+            .Select(NormalizeNullable)
+            .Where(value => value is not null)
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+        this.FavoriteItemKeys = this.FavoriteItemKeys
+            .Select(NormalizeNullable)
+            .Where(value => value is not null)
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
             .ToList();
         this.DefaultQuickFilter = Enum.IsDefined(this.DefaultQuickFilter) ? this.DefaultQuickFilter : LootHistoryQuickFilter.All;
         this.DefaultGroupingMode = Enum.IsDefined(this.DefaultGroupingMode) ? this.DefaultGroupingMode : LootHistoryGroupingMode.Flat;
@@ -106,6 +126,26 @@ public sealed class Configuration : IPluginConfiguration
         if (this.Version < 9 && this.ShowOnlySelfLoot && this.DefaultQuickFilter == LootHistoryQuickFilter.All)
         {
             this.DefaultQuickFilter = LootHistoryQuickFilter.Self;
+        }
+
+        if (this.BlacklistedItemIds.Count > 0)
+        {
+            foreach (var itemId in this.BlacklistedItemIds)
+            {
+                this.BlacklistedItemKeys.Add($"item:{itemId}");
+            }
+
+            this.BlacklistedItemIds.Clear();
+        }
+
+        if (this.FavoriteItemIds.Count > 0)
+        {
+            foreach (var itemId in this.FavoriteItemIds)
+            {
+                this.FavoriteItemKeys.Add($"item:{itemId}");
+            }
+
+            this.FavoriteItemIds.Clear();
         }
 
 #pragma warning disable CS0618

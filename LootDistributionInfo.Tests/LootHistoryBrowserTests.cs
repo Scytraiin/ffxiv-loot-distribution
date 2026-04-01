@@ -9,7 +9,7 @@ namespace LootDistributionInfo.Tests;
 public sealed class LootHistoryBrowserTests
 {
     [Fact]
-    public void FilterAndSort_FavoritesQuickFilter_OnlyReturnsFavoritedResolvedItems()
+    public void FilterAndSort_FavoritesQuickFilter_UsesStableItemKeys()
     {
         var records = new[]
         {
@@ -28,10 +28,11 @@ public sealed class LootHistoryBrowserTests
                 string.Empty,
                 string.Empty,
                 Array.Empty<string>(),
-                new HashSet<uint> { 1002u }));
+                new HashSet<string> { "item:1002", "name:unresolved" }));
 
-        Assert.Single(visible);
-        Assert.Equal("Potion", visible[0].ItemName);
+        Assert.Equal(2, visible.Count);
+        Assert.Contains(visible, record => record.ItemName == "Potion");
+        Assert.Contains(visible, record => record.ItemName == "Unresolved");
     }
 
     [Fact]
@@ -53,7 +54,7 @@ public sealed class LootHistoryBrowserTests
                 string.Empty,
                 string.Empty,
                 Array.Empty<string>(),
-                Array.Empty<uint>()));
+                Array.Empty<string>()));
 
         Assert.Single(visible);
         Assert.Equal(LootWhoConfidence.Self, visible[0].WhoConfidence);
@@ -79,7 +80,7 @@ public sealed class LootHistoryBrowserTests
                 string.Empty,
                 string.Empty,
                 Array.Empty<string>(),
-                Array.Empty<uint>()));
+                Array.Empty<string>()));
 
         Assert.Equal(["Potion", "Crystal", "Animal Skin"], visible.Select(record => record.ItemName));
     }
@@ -103,7 +104,7 @@ public sealed class LootHistoryBrowserTests
                 string.Empty,
                 string.Empty,
                 new[] { "Materia" },
-                Array.Empty<uint>()));
+                Array.Empty<string>()));
 
         Assert.Single(visible);
         Assert.Equal("Animal Skin", visible[0].ItemName);
@@ -118,7 +119,7 @@ public sealed class LootHistoryBrowserTests
                 "Materia",
                 string.Empty,
                 new[] { "Materia" },
-                Array.Empty<uint>()));
+                Array.Empty<string>()));
 
         Assert.Single(explicitlySelected);
         Assert.Equal("Wind Materia", explicitlySelected[0].ItemName);

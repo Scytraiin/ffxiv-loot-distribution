@@ -37,6 +37,8 @@ public sealed class LootRecord
 
     public LootTypeBucket LootTypeBucket { get; set; }
 
+    public List<LootRollEntry> RollEntries { get; set; } = [];
+
     public uint? ItemId { get; set; }
 
     public uint? IconId { get; set; }
@@ -91,6 +93,11 @@ public sealed class LootRecord
         this.WhoWorldName = NormalizeNullable(this.WhoWorldName);
         this.Quantity = this.Quantity <= 0 ? 1 : this.Quantity;
         this.ItemName = NormalizeNullable(this.ItemName);
+        this.RollEntries ??= [];
+        foreach (var entry in this.RollEntries)
+        {
+            entry.Normalize();
+        }
         var needsLegacyLootMigration = this.ItemName is null;
         this.ItemCategoryLabel = NormalizeNullable(this.ItemCategoryLabel);
         this.FilterGroupLabel = NormalizeNullable(this.FilterGroupLabel);

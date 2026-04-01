@@ -7,6 +7,7 @@ using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
+using Dalamud.Utility;
 
 using Lumina.Text.ReadOnly;
 using Lumina.Excel.Sheets;
@@ -16,6 +17,8 @@ namespace LootDistributionInfo;
 public sealed class LootCaptureService : IDisposable
 {
     private static readonly TimeSpan DedupeWindow = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan RollBackfillWindow = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan RollSessionWindow = TimeSpan.FromMinutes(5);
 
     private readonly Configuration configuration;
     private readonly IChatGui chatGui;
@@ -26,6 +29,7 @@ public sealed class LootCaptureService : IDisposable
     private readonly LootHistory history;
     private readonly DebugEventBuffer debugEventBuffer;
     private readonly ItemClassificationService itemClassificationService;
+    private readonly PendingRollTracker pendingRollTracker;
     private string currentZoneName;
     private LootTypeBucket currentLootTypeBucket;
 
@@ -47,6 +51,7 @@ public sealed class LootCaptureService : IDisposable
         this.history = new LootHistory(this.configuration.RetainHistoryBetweenSessions ? this.configuration.StoredRecords : []);
         this.debugEventBuffer = new DebugEventBuffer();
         this.itemClassificationService = new ItemClassificationService(this.dataManager);
+        this.pendingRollTracker = new PendingRollTracker(RollSessionWindow);
         this.currentZoneName = this.ResolveZoneName(this.clientState.TerritoryType);
         this.currentLootTypeBucket = this.ResolveLootTypeBucket(this.clientState.TerritoryType);
         this.history.Trim(this.configuration.MaxEntries);
@@ -165,16 +170,57 @@ public sealed class LootCaptureService : IDisposable
     private void OnLogMessage(ILogMessage message)
     {
         ReadOnlySeString formattedMessage = message.FormatLogMessageForDebugging();
-        this.Debug("Log", $"Received log message: {formattedMessage.ExtractText()}");
+        this.Debug("Log", $"Received log message #{message.LogMessageId}: {formattedMessage.ExtractText()}");
         this.ProcessIncomingText(formattedMessage.ExtractText(), LootCaptureSource.LogMessage, logMessage: message);
     }
 
     private void ProcessIncomingText(string rawText, LootCaptureSource source, SeString? message = null, ILogMessage? logMessage = null)
     {
-        this.TryCaptureLoot(rawText, source, message, logMessage);
+        var capturedAtUtc = DateTimeOffset.UtcNow;
+        this.ExpireOldRollSessions(capturedAtUtc);
+
+        if (this.TryCaptureRoll(rawText, source, capturedAtUtc, message, logMessage))
+        {
+            return;
+        }
+
+        this.TryCaptureLoot(rawText, source, capturedAtUtc, message, logMessage);
     }
 
-    private void TryCaptureLoot(string rawText, LootCaptureSource source, SeString? message, ILogMessage? logMessage)
+    private bool TryCaptureRoll(string rawText, LootCaptureSource source, DateTimeOffset capturedAtUtc, SeString? message, ILogMessage? logMessage)
+    {
+        var rollContext = this.BuildRollExtractionContext(message, logMessage);
+        var observation = LootRollExtractor.TryExtract(rawText, rollContext, this.currentZoneName, capturedAtUtc);
+        if (observation is null)
+        {
+            if (rawText.Contains("Need", StringComparison.OrdinalIgnoreCase)
+                || rawText.Contains("Greed", StringComparison.OrdinalIgnoreCase)
+                || rawText.Contains("Pass", StringComparison.OrdinalIgnoreCase))
+            {
+                this.Debug("RollMiss", $"Missed {source}: {rawText}");
+            }
+
+            return false;
+        }
+
+        this.Debug(
+            "RollHit",
+            $"Matched {source}{(observation.LogMessageId is uint logMessageId ? $" #{logMessageId}" : string.Empty)}: {FormatRollEntry(observation.Entry)} on {observation.ItemName} [{observation.ItemKey}].");
+
+        if (this.TryAttachRollToRecentRecord(observation))
+        {
+            this.PersistHistory();
+            return true;
+        }
+
+        var session = this.pendingRollTracker.AddOrAppend(observation);
+        this.Debug(
+            "RollSession",
+            $"Queued {FormatRollEntry(observation.Entry)} for {session.ItemName} in {session.ZoneName} ({session.Entries.Count} roll{(session.Entries.Count == 1 ? string.Empty : "s")}).");
+        return true;
+    }
+
+    private void TryCaptureLoot(string rawText, LootCaptureSource source, DateTimeOffset capturedAtUtc, SeString? message, ILogMessage? logMessage)
     {
         var parsedLoot = LootMatcher.TryMatch(rawText);
         if (parsedLoot is null)
@@ -183,7 +229,7 @@ public sealed class LootCaptureService : IDisposable
             return;
         }
 
-        var matchedRecord = this.BuildRecord(parsedLoot, source, message, logMessage);
+        var matchedRecord = this.BuildRecord(parsedLoot, source, capturedAtUtc, message, logMessage);
         this.Debug("Matcher", $"Matched {source}: who={matchedRecord.WhoDisplayName ?? matchedRecord.WhoName ?? "<unknown>"} ({matchedRecord.WhoConfidence}), quantity={matchedRecord.Quantity}, item={matchedRecord.ItemName ?? "<unknown>"}, type={matchedRecord.LootTypeBucket}.");
 
         // Dedupe keeps the shared chat/log pipeline from storing the same loot line twice when both
@@ -247,7 +293,7 @@ public sealed class LootCaptureService : IDisposable
         return TryConvertWorldId(this.playerState.HomeWorld.RowId);
     }
 
-    private LootRecord BuildRecord(LootParseResult parsedLoot, LootCaptureSource source, SeString? message, ILogMessage? logMessage)
+    private LootRecord BuildRecord(LootParseResult parsedLoot, LootCaptureSource source, DateTimeOffset capturedAtUtc, SeString? message, ILogMessage? logMessage)
     {
         // Record construction is where the raw matcher output turns into a durable UI record:
         // recipient verification, zone snapshot, loot-type bucket, and item metadata are all
@@ -258,12 +304,12 @@ public sealed class LootCaptureService : IDisposable
             this.GetPartyAndAllianceMembers(),
             this.GetLocalPlayerName(),
             this.GetLocalHomeWorldId());
-        var itemPayload = this.TryExtractItemPayload(message);
+        var itemPayload = this.TryExtractItemPayload(message, logMessage);
         var itemClassification = this.itemClassificationService.Classify(parsedLoot.ItemName, itemPayload?.ItemId);
 
         var record = new LootRecord
         {
-            CapturedAtUtc = DateTimeOffset.UtcNow,
+            CapturedAtUtc = capturedAtUtc,
             ZoneName = this.currentZoneName,
             RawText = parsedLoot.RawText,
             WhoName = resolvedRecipient.WhoName,
@@ -291,6 +337,7 @@ public sealed class LootCaptureService : IDisposable
             Source = source,
         };
 
+        this.TryAttachPendingRolls(record);
         record.Normalize();
         return record;
     }
@@ -316,9 +363,9 @@ public sealed class LootCaptureService : IDisposable
     {
         var candidates = new List<LootRecipientCandidate>();
 
-        if (message is not null)
+        foreach (var seString in this.GetStructuredSeStrings(message, logMessage))
         {
-            foreach (var payload in message.Payloads.OfType<PlayerPayload>())
+            foreach (var payload in seString.Payloads.OfType<PlayerPayload>())
             {
                 var baseName = payload.PlayerName?.Trim();
                 if (string.IsNullOrWhiteSpace(baseName))
@@ -333,11 +380,7 @@ public sealed class LootCaptureService : IDisposable
             }
         }
 
-        if (logMessage is not null)
-        {
-            this.AddLogEntityCandidate(candidates, logMessage.SourceEntity);
-            this.AddLogEntityCandidate(candidates, logMessage.TargetEntity);
-        }
+        this.AddStructuredLogEntityCandidates(candidates, logMessage);
 
         // Chat payloads and structured log entities can point at the same player, so collapse them
         // into a unique recipient candidate list before verification.
@@ -345,6 +388,36 @@ public sealed class LootCaptureService : IDisposable
             .GroupBy(candidate => $"{LootMatcher.NormalizeForNameMatch(candidate.BaseName)}|{candidate.HomeWorldId}")
             .Select(group => group.First())
             .ToList();
+    }
+
+    private LootRollExtractionContext BuildRollExtractionContext(SeString? message, ILogMessage? logMessage)
+    {
+        var players = this.GetStructuredRecipientCandidates(message, logMessage)
+            .Select(candidate => new LootRollPlayerCandidate(
+                candidate.BaseName,
+                string.IsNullOrWhiteSpace(candidate.WorldName) || candidate.HomeWorldId == this.GetLocalHomeWorldId()
+                    ? candidate.BaseName
+                    : $"{candidate.BaseName} ({candidate.WorldName})",
+                candidate.HomeWorldId,
+                candidate.WorldName))
+            .ToList();
+        var items = this.GetStructuredItemCandidates(message, logMessage)
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.DisplayName))
+            .Select(candidate => new LootRollItemCandidate(candidate.DisplayName!, candidate.ItemId))
+            .ToList();
+        var ints = this.GetLogIntParameters(logMessage);
+        return new LootRollExtractionContext(players, items, ints, this.GetLocalHomeWorldId(), logMessage?.LogMessageId);
+    }
+
+    private void AddStructuredLogEntityCandidates(List<LootRecipientCandidate> candidates, ILogMessage? logMessage)
+    {
+        if (logMessage is null)
+        {
+            return;
+        }
+
+        this.AddLogEntityCandidate(candidates, logMessage.SourceEntity);
+        this.AddLogEntityCandidate(candidates, logMessage.TargetEntity);
     }
 
     private void AddLogEntityCandidate(List<LootRecipientCandidate> candidates, ILogMessageEntity? entity)
@@ -403,24 +476,163 @@ public sealed class LootCaptureService : IDisposable
         return LootTypeClassifier.Classify(contentTypeId);
     }
 
-    private ItemPayloadMatch? TryExtractItemPayload(SeString? message)
+    private ItemPayloadMatch? TryExtractItemPayload(SeString? message, ILogMessage? logMessage)
     {
-        if (message is null)
-        {
-            return null;
-        }
-
         // Item payloads are the most reliable way to get an item id/icon source. The fallback
         // path later is exact-name lookup against the item sheet.
-        foreach (var payload in message.Payloads)
+        foreach (var seString in this.GetStructuredSeStrings(message, logMessage))
         {
-            if (payload is ItemPayload itemPayload)
+            foreach (var payload in seString.Payloads)
             {
-                return new ItemPayloadMatch(itemPayload.ItemId, ContainsHighQualityMarker(message.TextValue, itemPayload.DisplayName), itemPayload.DisplayName);
+                if (payload is ItemPayload itemPayload)
+                {
+                    return new ItemPayloadMatch(
+                        itemPayload.ItemId,
+                        itemPayload.IsHQ || ContainsHighQualityMarker(seString.TextValue, itemPayload.DisplayName),
+                        itemPayload.DisplayName);
+                }
             }
         }
 
         return null;
+    }
+
+    private IReadOnlyList<ItemPayloadMatch> GetStructuredItemCandidates(SeString? message, ILogMessage? logMessage)
+    {
+        var matches = new List<ItemPayloadMatch>();
+        foreach (var seString in this.GetStructuredSeStrings(message, logMessage))
+        {
+            foreach (var payload in seString.Payloads.OfType<ItemPayload>())
+            {
+                matches.Add(new ItemPayloadMatch(
+                    payload.ItemId,
+                    payload.IsHQ || ContainsHighQualityMarker(seString.TextValue, payload.DisplayName),
+                    payload.DisplayName));
+            }
+        }
+
+        return matches
+            .GroupBy(match => match.ItemId)
+            .Select(group => group.First())
+            .ToList();
+    }
+
+    private IReadOnlyList<SeString> GetStructuredSeStrings(SeString? message, ILogMessage? logMessage)
+    {
+        var results = new List<SeString>();
+        if (message is not null)
+        {
+            results.Add(message);
+        }
+
+        if (logMessage is not null)
+        {
+            for (var index = 0; index < logMessage.ParameterCount; index++)
+            {
+                if (!logMessage.TryGetStringParameter(index, out var value))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    results.Add(value.ToDalamudString());
+                }
+                catch (Exception ex)
+                {
+                    this.Debug("RollParam", $"Failed to parse string parameter {index} for log #{logMessage.LogMessageId}: {ex.Message}");
+                }
+            }
+        }
+
+        return results;
+    }
+
+    private IReadOnlyList<int> GetLogIntParameters(ILogMessage? logMessage)
+    {
+        if (logMessage is null)
+        {
+            return [];
+        }
+
+        var values = new List<int>();
+        for (var index = 0; index < logMessage.ParameterCount; index++)
+        {
+            if (logMessage.TryGetIntParameter(index, out var value))
+            {
+                values.Add(value);
+            }
+        }
+
+        return values;
+    }
+
+    private void TryAttachPendingRolls(LootRecord record)
+    {
+        var itemKey = LootItemKey.Build(record);
+        if (itemKey is null)
+        {
+            return;
+        }
+
+        var attachedEntries = this.pendingRollTracker.TryResolve(itemKey, record.ZoneName, record.CapturedAtUtc);
+        if (attachedEntries is null || attachedEntries.Count == 0)
+        {
+            return;
+        }
+
+        record.RollEntries.AddRange(attachedEntries);
+        this.Debug("RollResolve", $"Attached {attachedEntries.Count} pending roll{(attachedEntries.Count == 1 ? string.Empty : "s")} to {record.ItemName ?? record.RawText}.");
+    }
+
+    private bool TryAttachRollToRecentRecord(LootRollObservation observation)
+    {
+        var matchingRecord = this.history.Records
+            .FirstOrDefault(record =>
+                string.Equals(LootItemKey.Build(record), observation.ItemKey, StringComparison.Ordinal)
+                && string.Equals(record.ZoneName, observation.ZoneName, StringComparison.OrdinalIgnoreCase)
+                && (record.CapturedAtUtc - observation.CapturedAtUtc).Duration() <= RollBackfillWindow);
+
+        if (matchingRecord is null)
+        {
+            return false;
+        }
+
+        if (matchingRecord.RollEntries.Any(existingEntry =>
+                string.Equals(existingEntry.PlayerDisplayName, observation.Entry.PlayerDisplayName, StringComparison.OrdinalIgnoreCase)
+                && existingEntry.RollType == observation.Entry.RollType
+                && existingEntry.RollValue == observation.Entry.RollValue
+                && (existingEntry.CapturedAtUtc - observation.Entry.CapturedAtUtc).Duration() <= TimeSpan.FromSeconds(2)))
+        {
+            return true;
+        }
+
+        matchingRecord.RollEntries.Add(observation.Entry);
+        matchingRecord.Normalize();
+        this.Debug(
+            "RollBackfill",
+            $"Attached late roll to {matchingRecord.ItemName ?? matchingRecord.RawText}: {FormatRollEntry(observation.Entry)}.");
+        return true;
+    }
+
+    private void ExpireOldRollSessions(DateTimeOffset nowUtc)
+    {
+        var expiredSessions = this.pendingRollTracker.ExpireOlderThan(nowUtc - RollSessionWindow);
+        foreach (var expiredSession in expiredSessions)
+        {
+            this.Debug(
+                "RollExpire",
+                $"Expired {expiredSession.Entries.Count} pending roll{(expiredSession.Entries.Count == 1 ? string.Empty : "s")} for {expiredSession.ItemName} in {expiredSession.ZoneName}.");
+        }
+    }
+
+    private static string FormatRollEntry(LootRollEntry entry)
+    {
+        return entry.RollType switch
+        {
+            LootRollType.Pass => $"{entry.PlayerDisplayName} - Pass",
+            _ => $"{entry.PlayerDisplayName} - {entry.RollType} {entry.RollValue}",
+        };
     }
 
     private static bool ContainsHighQualityMarker(string rawText, string? lootText)

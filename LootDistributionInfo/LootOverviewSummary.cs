@@ -56,12 +56,8 @@ public sealed class LootOverviewSummary
 
     private static string GetUniqueItemKey(LootRecord record)
     {
-        if (record.ItemId is uint itemId)
-        {
-            return $"id:{itemId}";
-        }
-
-        return $"text:{GetDisplayItemName(record).Trim().ToLowerInvariant()}";
+        return LootItemKey.Build(record)
+            ?? $"text:{GetDisplayItemName(record).Trim().ToLowerInvariant()}";
     }
 
     private static string GetDisplayItemName(LootRecord record)

@@ -50,7 +50,7 @@ public sealed record LootHistoryBrowseOptions(
     string SelectedCategory,
     string SelectedZone,
     IReadOnlyCollection<string> HiddenCategoryLabels,
-    IReadOnlyCollection<uint> FavoriteItemIds);
+    IReadOnlyCollection<string> FavoriteItemKeys);
 
 public sealed record LootHistoryGroup(string Label, IReadOnlyList<LootRecord> Records);
 
@@ -60,7 +60,7 @@ public static class LootHistoryBrowser
     {
         var filtered = records
             .Where(record => MatchesSearch(record, options.SearchText))
-            .Where(record => MatchesQuickFilter(record, options.QuickFilter, options.FavoriteItemIds))
+            .Where(record => MatchesQuickFilter(record, options.QuickFilter, options.FavoriteItemKeys))
             .Where(record => MatchesRecipientFilter(record, options.RecipientFilter))
             .Where(record => MatchesHiddenCategories(record, options.SelectedCategory, options.HiddenCategoryLabels))
             .Where(record => MatchesCategory(record, options.SelectedCategory))
@@ -180,14 +180,14 @@ public static class LootHistoryBrowser
             || Contains(record.Quantity.ToString(), searchText);
     }
 
-    private static bool MatchesQuickFilter(LootRecord record, LootHistoryQuickFilter quickFilter, IReadOnlyCollection<uint> favoriteItemIds)
+    private static bool MatchesQuickFilter(LootRecord record, LootHistoryQuickFilter quickFilter, IReadOnlyCollection<string> favoriteItemKeys)
     {
         return quickFilter switch
         {
             LootHistoryQuickFilter.Self => record.WhoConfidence == LootWhoConfidence.Self,
             LootHistoryQuickFilter.Dungeon => record.LootTypeBucket == LootTypeBucket.Dungeon,
             LootHistoryQuickFilter.Raid => record.LootTypeBucket == LootTypeBucket.Raid,
-            LootHistoryQuickFilter.Favorites => record.ItemId is uint itemId && favoriteItemIds.Contains(itemId),
+            LootHistoryQuickFilter.Favorites => LootItemKey.Build(record) is string itemKey && favoriteItemKeys.Contains(itemKey),
             _ => true,
         };
     }

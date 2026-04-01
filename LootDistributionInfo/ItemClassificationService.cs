@@ -70,40 +70,7 @@ public sealed class ItemClassificationService
 
     internal static string NormalizeLookupKey(string? itemName)
     {
-        if (string.IsNullOrWhiteSpace(itemName))
-        {
-            return string.Empty;
-        }
-
-        // Normalize the display-facing loot text into something that can match the local item
-        // sheet reliably: remove leading quantities, optional articles, and HQ suffix noise.
-        var trimmed = itemName.Trim();
-        var quantityEnd = 0;
-        while (quantityEnd < trimmed.Length && char.IsDigit(trimmed[quantityEnd]))
-        {
-            quantityEnd++;
-        }
-
-        if (quantityEnd > 0 && quantityEnd < trimmed.Length && trimmed[quantityEnd] == ' ')
-        {
-            trimmed = trimmed[(quantityEnd + 1)..];
-        }
-
-        if (trimmed.EndsWith(" HQ", StringComparison.OrdinalIgnoreCase))
-        {
-            trimmed = trimmed[..^3];
-        }
-
-        foreach (var prefix in new[] { "a ", "an ", "the " })
-        {
-            if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                trimmed = trimmed[prefix.Length..];
-                break;
-            }
-        }
-
-        return LootMatcher.NormalizeForMatch(trimmed).Trim();
+        return LootItemKey.NormalizeItemName(itemName);
     }
 
     private static ItemClassificationResult CreateResult(Item item, string resolvedItemName)
