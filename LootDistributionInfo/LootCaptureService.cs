@@ -153,8 +153,10 @@ public sealed class LootCaptureService : IDisposable
         this.debugEventBuffer.Clear();
     }
 
-    private void OnChatMessage(XivChatType type, int timestamp, ref Dalamud.Game.Text.SeStringHandling.SeString sender, ref Dalamud.Game.Text.SeStringHandling.SeString message, ref bool isHandled)
+    private void OnChatMessage(IHandleableChatMessage chatMessage)
     {
+        var type = chatMessage.LogKind;
+        var message = chatMessage.Message;
         var flattenedMessage = this.FlattenMessageText(message);
         this.Debug("Chat", $"Received {type}: {flattenedMessage}");
 
@@ -253,14 +255,14 @@ public sealed class LootCaptureService : IDisposable
         this.configuration.Save();
     }
 
-    private void OnTerritoryChanged(ushort territoryType)
+    private void OnTerritoryChanged(uint territoryType)
     {
         this.currentZoneName = this.ResolveZoneName(territoryType);
         this.currentLootTypeBucket = this.ResolveLootTypeBucket(territoryType);
         this.Debug("Zone", $"Entered {this.currentZoneName} ({territoryType}) [{this.currentLootTypeBucket}].");
     }
 
-    private string ResolveZoneName(ushort territoryType)
+    private string ResolveZoneName(uint territoryType)
     {
         if (territoryType == 0)
         {
@@ -460,7 +462,7 @@ public sealed class LootCaptureService : IDisposable
         return record.WhoDisplayName ?? record.WhoName ?? "Unknown";
     }
 
-    private LootTypeBucket ResolveLootTypeBucket(ushort territoryType)
+    private LootTypeBucket ResolveLootTypeBucket(uint territoryType)
     {
         if (territoryType == 0)
         {

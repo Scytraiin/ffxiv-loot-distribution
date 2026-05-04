@@ -1,84 +1,49 @@
-# FFYIV Workspace
+# FFXIV Loot History
 
-> Workspace for the Loot Distribution Info Dalamud plugin, its tests, and its release tooling.
+Workspace for the `Loot Distribution Info` Dalamud plugin.
 
----
+The repo contains the plugin, unit tests, local Docker validation, release notes, and custom repo metadata.
 
-## Overview
+## Projects
 
-This workspace currently contains one active plugin project:
+- `LootDistributionInfo/` - the Dalamud plugin.
+- `LootDistributionInfo.Tests/` - unit tests for parser, history, roll tracking, and metadata behavior.
+- `scyt.repo.json` - custom Dalamud repository metadata.
+- `release-notes/` - release notes used for GitHub releases.
 
-- `Loot Distribution Info`
+## Plugin
 
-It also contains:
+`Loot Distribution Info` watches loot-related chat/log messages and keeps a searchable in-game history of:
 
-- a standalone test project for the pure matching/history logic
-- a custom Dalamud repository JSON
-- Docker-based validation support
-- tracked feature documentation in `Feature_detail.md`
-- tracked architecture documentation in `Architecture.md`
+- when loot was seen
+- where it dropped
+- who received it
+- what item/currency was involved
 
----
+Open it in game with:
 
-## Active Projects
+```text
+/lootinfo
+```
 
-### Plugin
+Open settings with:
 
-- `LootDistributionInfo/`
+```text
+/lootinfo config
+```
 
-This is the actual Dalamud plugin project. It captures loot-like chat/log lines and shows them in a small in-game history window.
+## Local Validation
 
-### Tests
+The Docker workflow keeps local validation reproducible without requiring a global .NET install on the host.
 
-- `LootDistributionInfo.Tests/`
-
-This project contains unit tests for the pure logic:
-
-- matcher behavior
-- dedupe behavior
-- retention trimming
-- repository metadata alignment
-
-### Custom Repo Metadata
-
-- `scyt.repo.json`
-
-This is the custom Dalamud repository file intended for later hosting.
-
----
-
-## Docker Validation
-
-Workspace root includes Docker support for isolated validation:
-
-- `Dockerfile`
-- `.dockerignore`
-
-The Docker workflow is for:
-
-- restoring packages
-- running tests
-- building the plugin when a valid Dalamud dev folder is mounted
-
-It is **not** for:
-
-- running the plugin in the game
-- replacing actual Dalamud runtime testing
-- installing .NET globally on the host
-
-### Commands
-
-Run from:
-
-- workspace root
+Run from the workspace root:
 
 ```bash
 docker build -t loot-distribution-info-ci .
 docker run --rm loot-distribution-info-ci
-docker run --rm -v "$PWD/out:/out" loot-distribution-info-ci
 ```
 
-If you have a real Dalamud `Hooks/dev` folder:
+To build the actual plugin package, mount a Dalamud dev folder:
 
 ```bash
 docker run --rm \
@@ -87,38 +52,43 @@ docker run --rm \
   loot-distribution-info-ci
 ```
 
----
+Build output is exported to:
 
-## Suggested Workflow
+```text
+out/plugin/
+```
 
-1. Work inside `LootDistributionInfo`.
-2. Run the logic tests in `LootDistributionInfo.Tests`.
-3. Use Docker for isolated validation when useful.
-4. Test the plugin in a real Dalamud game environment.
-5. Publish `latest.zip` and `scyt.repo.json` when a release is ready.
+Release-ready artifacts are exported to:
 
----
+```text
+out/release/
+```
+
+## Release
+
+Current release target:
+
+- tag: `v2.0.0-beta`
+- package: `out/release/latest.zip`
+- repo metadata: `out/release/scyt.repo.json`
+
+Manual release flow:
+
+1. Update the plugin version and release notes.
+2. Build with a valid Dalamud dev folder.
+3. Test in game.
+4. Create the GitHub release tag.
+5. Upload `latest.zip`.
+6. Publish the updated `scyt.repo.json`.
 
 ## Status
 
-This workspace is set up for iterative plugin development.
+- License: GPL-3.0, see `LICENSE`.
+- Dalamud API target: 15.
+- Current plugin version: `2.0.0-beta`.
+- Runtime build validated against local Dalamud `15.0.0.2/dev`.
 
-License:
-
-- GPL-3.0
-- see `LICENSE`
-- implementation remains clean-room even where feature direction was inspired by other loot-tracking plugins
-
-Current state:
-
-- plugin project exists
-- tests exist
-- custom repo metadata exists
-- Docker validation exists
-- release-ready artifacts can be exported to `out/release`
-- the current release target is `v1.0.3-alpha`
-
-For plugin-specific details, see:
+For more detail, see:
 
 - `LootDistributionInfo/README.md`
 - `Feature_detail.md`

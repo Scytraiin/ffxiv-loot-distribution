@@ -15,7 +15,7 @@ public sealed class RepositoryMetadataTests
         var pluginEntry = Assert.Single(root.EnumerateArray());
         Assert.Equal("scyt.raiin", pluginEntry.GetProperty("Author").GetString());
         Assert.Equal("LootDistributionInfo", pluginEntry.GetProperty("InternalName").GetString());
-        Assert.Equal(14, pluginEntry.GetProperty("DalamudApiLevel").GetInt32());
+        Assert.Equal(15, pluginEntry.GetProperty("DalamudApiLevel").GetInt32());
         Assert.False(pluginEntry.GetProperty("IsHide").GetBoolean());
         Assert.False(pluginEntry.GetProperty("IsTestingExclusive").GetBoolean());
     }

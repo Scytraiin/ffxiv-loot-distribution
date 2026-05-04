@@ -1,177 +1,105 @@
 # Loot Distribution Info
 
-> A Dalamud plugin that tracks loot messages and keeps a searchable in-game history of where the loot happened and who received it.
+Dalamud plugin for tracking loot messages in game.
 
-License: GPL-3.0. The implementation is clean-room even where feature direction was inspired by other loot-tracking plugins.
+It listens to Dalamud chat/log events, stores matching loot lines, enriches them with zone/player/item context where possible, and shows the result in a searchable history window.
 
----
+License: GPL-3.0.
 
-## At a Glance
+## Quick Info
 
-| Topic | Details |
+| Item | Value |
 | --- | --- |
-| Plugin | `Loot Distribution Info` |
 | Command | `/lootinfo` |
 | Settings | `/lootinfo config` |
-| Goal | Capture loot messages and show `when / where / who / what` in a searchable history browser |
-| Current approach | Broad loot matching with zone capture and recipient verification |
-| Scope | Read-only observation through standard Dalamud services |
+| Dalamud API | 15 |
+| Current version | `2.0.0-beta` |
+| Release tag | `v2.0.0-beta` |
 
----
+## Features
 
-## What It Does
+- Captures loot-style chat/log messages.
+- Tracks zone, timestamp, recipient, quantity, and item text.
+- Resolves item metadata when payloads or game data make that possible.
+- Groups, filters, sorts, and searches the captured history.
+- Supports favorites, item blacklist, compact mode, and configurable columns.
+- Tracks Need/Greed/Pass roll messages and attaches them to matching loot records.
+- Includes a debug window for checking capture/parser behavior in game.
 
-- Watches `ChatMessage` and `LogMessage` through Dalamud.
-- Detects lines containing loot-style verbs such as `obtain`, `obtained`, and `obtains`.
-- Resolves the current zone and snapshots it onto each loot record.
-- Attempts to determine who got the loot, including party/alliance verification when possible.
-- Resolves item metadata such as icon, rarity, and item classification when the game data allows it.
-- Stores captured lines in memory and, by default, persists them across sessions.
-- Shows a compact monitor view or a full grouped history browser in the plugin window.
-- Lets you filter, group, sort, pin favorites, blacklist items, and clear captured history.
-- Offers Debug Mode with a live debug log for capture and parser activity.
+## Matching Notes
 
-## What It Does Not Do
+The matcher is intentionally practical rather than magical.
 
-- It does not hook packets or use unsupported runtime tricks.
-- It does not suppress, rewrite, or re-print chat lines.
-- It does not attempt perfect semantic parsing for every system line.
-- It does not support export or multi-language matching yet.
+It catches common loot lines such as:
 
----
+```text
+You obtain 368 gil.
+You obtain a bottle of desert saffron.
+Player X obtains a loot item.
+```
 
-## How Matching Works
+Structured payloads are preferred when Dalamud exposes them. Text parsing is kept as fallback because not every log line carries the same useful payloads.
 
-The matcher intentionally stays broad so it catches the common visible loot lines.
-
-It normalizes each incoming line and looks for loot-style verbs:
-
-- `obtain`
-- `obtained`
-- `obtains`
-
-It then tries to enrich the match with:
-
-- the current zone
-- the recipient name
-- a cleaned loot text
-
-That means it should catch common lines such as:
-
-- `You obtain 368 gil.`
-- `You obtain a bottle of desert saffron.`
-- `Player X obtains a loot item.`
-
-Because the matching is intentionally broad, some false positives are still possible. The raw line is always kept as fallback context.
-
----
+The raw line is always stored so odd cases can still be inspected later.
 
 ## In-Game Usage
 
-### Main Window
+Run:
 
-- Run `/lootinfo` to open the plugin window.
-- Compact mode shows a small `Who / Quantity / Loot` monitor.
-- Full mode shows:
-  - `Loot History` as a grouped and sortable browser
-  - `Item Details` as the dense metadata table
-  - `Overview` as a lightweight local summary
-- Use the toolbar to search, filter by recipient/category/zone, switch quick filters, group rows, and change sort order.
-- Expand history rows to inspect raw lines, classification, timestamps, and actions.
-- Use `Clear history` to wipe the current captured history.
+```text
+/lootinfo
+```
 
-### Settings
+The main window has:
 
-Run `/lootinfo config` to open the settings window.
+- a compact monitor view
+- a full history browser
+- item detail tables
+- overview stats
 
-Available settings:
+Run:
 
-- `Save history between sessions`
-- `History size`
-- `Show debug tools`
-- `Show item icons`
-- `Show item tooltips`
-- `Use compact main window by default`
-- default quick filter, grouping, and sort
-- column visibility for `Loot History` and `Item Details`
-- blacklist management
+```text
+/lootinfo config
+```
 
----
+Useful settings include:
 
-## Repository for Dalamud
+- save history between sessions
+- max history size
+- compact mode default
+- item icons/tooltips
+- debug tools
+- default grouping, sorting, and quick filter
+- visible columns
+- hidden categories and blacklist entries
 
-The workspace root contains a custom repository file:
+## Custom Repo
 
-- `scyt.repo.json`
+The custom repository metadata lives at the workspace root:
 
-Current state:
-
-- the repository URL points to the real GitHub repository
-- the custom repo JSON targets the current alpha release asset
-- the release asset must be uploaded as `latest.zip`
-- the icon asset is `assets/branding/Loot_History_v1.png`
+```text
+scyt.repo.json
+```
 
 Current release target:
 
-- repo: `https://github.com/Scytraiin/ffxiv-loot-distribution`
-- tag: `v1.0.3-alpha`
-- asset: `latest.zip`
+- repository: `https://github.com/Scytraiin/ffxiv-loot-distribution`
+- tag: `v2.0.0-beta`
+- asset name: `latest.zip`
+- generated release package: `out/release/latest.zip`
+- generated repo metadata: `out/release/scyt.repo.json`
 
----
+## Development
 
-## Project Layout
-
-- plugin: `LootDistributionInfo/`
-- tests: `LootDistributionInfo.Tests/`
-- custom repo metadata: `scyt.repo.json`
-- canonical feature reference: `Feature_detail.md`
-- architecture reference: `Architecture.md`
-
----
-
-## Local Development Workflow
-
-1. Update the project version and release tag when publishing a new version.
-2. Build the plugin with a real Dalamud-capable environment.
-3. Test it in game through a dev plugin path or through a hosted custom repo.
-4. Publish the plugin ZIP and `scyt.repo.json` once the behavior is stable.
-
----
-
-## Docker Validation
-
-Docker support in this workspace is additive infrastructure only.
-
-It does **not**:
-
-- change plugin behavior
-- change matcher logic
-- change repository metadata shape
-- install .NET on your host system
-- run the plugin inside FFXIV
-
-It **does**:
-
-- restore packages inside the container
-- run the unit tests
-- attempt to build the Windows-targeted plugin when a real `DALAMUD_HOME` is mounted
-- optionally export build output
-
-### Commands
-
-Run these commands from:
-
-- workspace root
+From the workspace root:
 
 ```bash
 docker build -t loot-distribution-info-ci .
 docker run --rm loot-distribution-info-ci
-docker run --rm -v "$PWD/out:/out" loot-distribution-info-ci
 ```
 
-### When You Have a Real Dalamud Dev Folder
-
-If you have a valid Dalamud `Hooks/dev` folder, mount it into the container as `/dalamud`:
+To build the plugin package, mount a valid Dalamud dev folder:
 
 ```bash
 docker run --rm \
@@ -180,98 +108,31 @@ docker run --rm \
   loot-distribution-info-ci
 ```
 
-### Notes
+Output:
 
-- Package restore happens inside Docker and needs network access.
-- The plugin build requires a real Dalamud `Hooks/dev` folder.
-- Without that folder, the container still runs the tests and then stops with a clear message.
-- Optional exported build output is written to `./out/plugin`.
+- `out/plugin/` - raw build output from the container
+- `out/release/latest.zip` - release ZIP for GitHub
+- `out/release/scyt.repo.json` - repo metadata to publish
 
----
+## Release Checklist
 
-## GitHub Actions
-
-This workspace includes a hosted GitHub Actions workflow for safe, fast validation.
-
-### `CI`
-
-The hosted CI workflow is safe to run on normal GitHub-hosted runners.
-
-It does:
-
-- restore and run the unit tests
-- build the Docker validation image as a workflow smoke check
-
-It does not:
-
-- build the actual Dalamud plugin package
-- create release assets
-
-### Recommended Release Flow
-
-For now, release packaging is intentionally kept out of GitHub Actions.
-
-Reason:
-
-- `Dalamud.NET.Sdk` packaging depends on a real Dalamud `Hooks/dev` environment
-- GitHub-hosted CI is great for tests and validation, but not enough for the final plugin package by itself
-- keeping release packaging manual keeps the workflow predictable
-
-Recommended flow:
-
-1. Use GitHub Actions `CI` for every push and pull request.
-2. Do runtime testing in a real Dalamud game environment.
-3. Build the release package manually on the machine that has the working Dalamud dev environment.
-4. Upload the ZIP to GitHub Releases.
-5. Update `scyt.repo.json` with the real release URLs.
-
-That keeps automation focused on what is reliable today and avoids a half-working release pipeline.
-
-### Manual Release Checklist
-
-When you are ready to publish a version:
-
-1. Update the version in `LootDistributionInfo.csproj`.
-2. Build the plugin on the machine that has a valid Dalamud dev setup.
-3. Confirm the output ZIP and generated manifest are correct.
-4. Create a GitHub release and upload the ZIP.
-5. Update `scyt.repo.json` so:
-   - `RepoUrl` points to the real GitHub repository
-   - `AssemblyVersion` and `TestingAssemblyVersion` match the release
-   - download links point to the uploaded ZIP
-   - `LastUpdate` is refreshed
-   - `Changelog` contains the release summary
-6. Host or publish the updated `scyt.repo.json`.
-
----
+1. Update `LootDistributionInfo.csproj`.
+2. Update `scyt.repo.json`.
+3. Add release notes under `release-notes/`.
+4. Build with the local Dalamud dev folder.
+5. Smoke test in game.
+6. Create the GitHub release.
+7. Upload `latest.zip`.
+8. Publish the updated repo JSON.
 
 ## Test Coverage
 
-The current test project covers:
+The test project covers:
 
-- positive matcher cases
-- negative matcher cases
-- recipient parsing and verification confidence
-- dedupe behavior across chat/log capture
-- retention trimming
-- metadata alignment between `scyt.repo.json` and `LootDistributionInfo.json`
-
----
-
-## Commands Reference
-
-- `/lootinfo` opens the main window
-- `/lootinfo config` opens the config window
-
----
-
-## Current Status
-
-This project is in an active alpha release state:
-
-- the loot history UI is implemented
-- zone and recipient enrichment are implemented
-- item classification, item icons, rarity styling, and overview stats are implemented
-- Debug Mode is implemented
-- Docker-based validation is working
-- release artifacts can be generated locally and uploaded to GitHub Releases
+- loot matcher behavior
+- quantity parsing
+- recipient resolution
+- roll extraction and pending-roll matching
+- history dedupe and trimming
+- browser/filter logic
+- repository metadata alignment
